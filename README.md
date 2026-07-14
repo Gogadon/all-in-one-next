@@ -61,3 +61,18 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - freie Krafttrainings mit Übungen, Sätzen, Gewicht und Wiederholungen
 - Aufwärmsätze, Trainingsvolumen, Notizen, Bearbeiten und Löschen
 - Plan und Zyklus bleiben die nächste Kraft-Etappe
+
+
+## Kraft- und Fortschritts-Update v7
+
+- einarmige Satzfelder für links und rechts
+- Progression verwendet die schwächere Seite
+- Steigerung erst, wenn beide Seiten in allen Zielsätzen die Maximalwiederholungen erreichen
+- Assistenzmodus ohne Minus-Eingabe
+- Umschalten von Unterstützung auf Körpergewicht oder Zusatzgewicht
+- Prefill aus dem letzten Training
+- Progressionsvorschläge für Double Progression, feste Wiederholungen und Technik
+- PR-Erkennung für Gewicht, Wiederholungen und reduzierte Unterstützung
+- Fortschrittsbereich mit Top-Gewicht, Durchschnittsgewicht und Übungsvolumen
+- Wochenvolumen als Balkendiagramm
+- aufklappbarer vollständiger Satzverlauf

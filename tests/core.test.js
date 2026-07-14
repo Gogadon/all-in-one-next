@@ -34,3 +34,14 @@ test('Altes Backup wird vom Importer konvertiert',async()=>{const legacy={app:'a
 
 
 test('Kraftvolumen ignoriert Aufwärmsätze',async()=>{const{strengthVolume}=await import('../src/strength.js');const s={segments:[{status:'completed',entries:[{metrics:{weight:50,repetitions:10},flags:[]},{metrics:{weight:30,repetitions:10},flags:['warmup']}]}]};assert.equal(strengthVolume(s),500)});
+
+
+test('Einarmige Progression verwendet die schwächere Seite',async()=>{
+  const{effectiveReps}=await import('../src/strength.js');
+  assert.equal(effectiveReps({metrics:{repetitionsLeft:12,repetitionsRight:11}}),11);
+});
+
+test('Assistiertes Volumen zählt nicht als bewegtes Gewicht',async()=>{
+  const{setVolume}=await import('../src/strength.js');
+  assert.equal(setVolume({metrics:{weight:-15,repetitions:12},flags:[]}),0);
+});

@@ -1,4 +1,4 @@
-import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{strengthOverview,strengthEditorView,strengthDetailView,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,setSetMetric,saveStrength,deleteStrength}from'./strength.js';
+import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{strengthOverview,strengthEditorView,strengthDetailView,strengthProgressView,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,toggleAssistMode,setSetMetric,saveStrength,deleteStrength,setProgressMetric,toggleProgress}from'./strength.js';
 
 const app=document.querySelector('#app'),file=document.querySelector('#importFile');
 let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso(),selectedDay=null;const openDaySessions=new Set();
@@ -253,7 +253,7 @@ function settings(){
 }
 
 function moduleBottom(m,view){
- if(m.type==='strength')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">🏋️<span>Training</span></button><button class="${view==='plan'?'active':''}" data-action="mview" data-view="plan">▤<span>Plan</span></button></nav>`;
+ if(m.type==='strength')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">🏋️<span>Training</span></button><button class="${view==='progress'?'active':''}" data-action="mview" data-view="progress">↗<span>Fortschritt</span></button><button class="${view==='plan'?'active':''}" data-action="mview" data-view="plan">▤<span>Plan</span></button></nav>`;
  if(m.type!=='tour')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="active">${m.icon}<span>${esc(m.label)}</span></button></nav>`;
  return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">${m.icon}<span>Touren</span></button><button class="${view==='statistics'?'active':''}" data-action="mview" data-view="statistics">▥<span>Statistik</span></button></nav>`
 }
@@ -272,7 +272,7 @@ function render(){
     else if(r.view==='statistics')c=statsView(m);
     else c=overview(getState(),m);
   }else if(m.type==='challenge')c=challengeView(getState(),todayIso());
-  else if(m.type==='strength'){if(r.view==='edit')c=strengthEditorView(getState());else if(r.view==='detail')c=strengthDetailView(getState(),r.id);else if(r.view==='plan')c=`<section class="module-hero"><div class="module-hero__icon">▤</div><div><span class="eyebrow">Kraft</span><h1>Plan & Zyklus</h1><p>Nächste Kraft-Etappe</p></div></section><div class="card"><h2>Planstruktur vorbereitet</h2><p class="muted">Der importierte Plan bleibt erhalten. Editor, Zyklusanker und Progression folgen als eigene Etappe.</p></div>`;else c=strengthOverview(getState());}
+  else if(m.type==='strength'){if(r.view==='edit')c=strengthEditorView(getState());else if(r.view==='detail')c=strengthDetailView(getState(),r.id);else if(r.view==='progress')c=strengthProgressView(getState());else if(r.view==='plan')c=`<section class="module-hero"><div class="module-hero__icon">▤</div><div><span class="eyebrow">Kraft</span><h1>Plan & Zyklus</h1><p>Nächste Kraft-Etappe</p></div></section><div class="card"><h2>Planstruktur vorbereitet</h2><p class="muted">Der importierte Plan bleibt erhalten. Editor, Zyklusanker und Progression folgen als eigene Etappe.</p></div>`;else c=strengthOverview(getState());}
   app.innerHTML=shell(m.label,c,{module:m,back:r.view==='edit'||r.view==='detail',bottom:moduleBottom(m,r.view)})
 }
 
@@ -308,6 +308,9 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='strength.set.add'){addSet(el.dataset.segment);render()}
   else if(a==='strength.set.remove'){removeSet(el.dataset.segment,el.dataset.set);render()}
   else if(a==='strength.warmup'){toggleWarmup(el.dataset.segment,el.dataset.set);render()}
+  else if(a==='strength.assist.toggle'){toggleAssistMode(el.dataset.segment);render()}
+  else if(a==='strength.progress.metric'){setProgressMetric(el.dataset.metric);render()}
+  else if(a==='strength.progress.toggle'){toggleProgress(el.dataset.id);render()}
   else if(a==='strength.save'){await updateState(s=>saveStrength(s),{snapshot:true,reason:'before-strength-save'});toast('Training gespeichert ✓');nav('/module/strength/overview')}
   else if(a==='strength.delete'){if(confirm('Training wirklich löschen?')){await updateState(s=>deleteStrength(s,el.dataset.id),{snapshot:true,reason:'before-strength-delete'});nav('/module/strength/overview')}}
   else if(a==='strength.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');const r=await shareCard(strengthShareData(s,getModule('strength').color,formatDate),`all-in-one-training-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
