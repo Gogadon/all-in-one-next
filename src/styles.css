@@ -48,3 +48,47 @@
 .calendar-legend{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--s1)}
 .calendar-legend span{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted)}
 @media(max-width:360px){.dashboard-modules{grid-template-columns:1fr 1fr}.dashboard-module{min-height:84px;padding:12px}.dashboard-module small{font-size:.67rem}}
+
+
+/* Kalender Etappe 3: Tages-Sheet mit modulübergreifenden Sessiondetails */
+.sheet-backdrop{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.58);backdrop-filter:blur(4px);opacity:0;pointer-events:none}
+.sheet-backdrop.open{opacity:1;pointer-events:auto}
+.day-sheet{position:fixed;left:50%;bottom:0;z-index:71;transform:translate(-50%,105%);width:min(100%,720px);max-height:84dvh;overflow:auto;background:var(--s1);border:1px solid var(--border);border-bottom:0;border-radius:26px 26px 0 0;padding:0 16px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -20px 60px rgba(0,0,0,.45);transition:transform .28s cubic-bezier(.2,.7,.2,1)}
+.day-sheet.open{transform:translate(-50%,0)}
+.day-sheet-handle{position:sticky;top:0;z-index:2;background:var(--s1);padding:11px 0 8px}
+.day-sheet-handle span{display:block;width:42px;height:4px;border-radius:999px;background:#454B54;margin:auto}
+.day-sheet-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:3px 1px 15px}
+.day-sheet-header>div{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.day-sheet-header h2{font-size:1.14rem;margin:0}
+.day-badge{font-size:.6rem;font-weight:850;text-transform:uppercase;letter-spacing:.1em;padding:4px 8px;border-radius:999px}
+.day-badge.today{background:var(--strength);color:#090B0E}
+.day-badge.future{background:var(--s3);color:var(--muted);border:1px solid var(--border)}
+.day-sheet-body{display:grid;gap:10px}
+.day-session{border:1px solid var(--border);border-radius:18px;background:linear-gradient(150deg,var(--s2),var(--s1));overflow:hidden}
+.day-session-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;text-align:left;background:none;border:0;color:var(--text)}
+.day-session-title{display:flex;align-items:center;gap:10px;min-width:0}
+.calendar-dot.large{width:8px;height:8px;flex:none;box-shadow:0 0 10px color-mix(in srgb,var(--dot) 60%,transparent)}
+.day-session-title>span:last-child{min-width:0}
+.day-session-title strong,.day-session-title small{display:block}
+.day-session-title strong{font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day-session-title small{font-size:.66rem;color:var(--muted);margin-top:3px}
+.day-session-right{display:flex;align-items:center;gap:9px;flex:none}
+.day-session-right small{font-size:.7rem;color:var(--muted);max-width:140px;text-align:right}
+.day-session-right b{font-size:1.35rem;color:var(--session-color);transition:transform .18s}
+.day-session-right b.open{transform:rotate(90deg)}
+.day-session-details{display:grid;gap:8px;border-top:1px solid var(--border);padding:13px 14px 15px}
+.day-detail-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.78rem}
+.day-detail-row span{color:var(--muted)}
+.day-detail-row strong{text-align:right}
+.day-note{margin:4px 0 0;padding:10px 11px;border-radius:12px;background:var(--s3);color:var(--muted);font-size:.74rem;white-space:pre-wrap}
+.day-exercise{display:grid;gap:7px;padding:9px 0;border-bottom:1px solid var(--border)}
+.day-exercise:last-child{border-bottom:0}
+.day-exercise-title{display:flex;align-items:center;gap:8px;font-size:.8rem}
+.day-exercise small{color:var(--muted)}
+.day-set{display:grid;grid-template-columns:54px 1fr;gap:8px;padding-left:16px;font-size:.7rem}
+.day-set span{color:var(--muted)}
+.day-set strong{font-weight:650}
+.day-empty{display:grid;justify-items:center;gap:8px;padding:34px 18px;color:var(--muted);text-align:center}
+.day-empty>span{font-size:2rem;color:#535A64}
+.day-empty p,.day-empty-small{margin:0;font-size:.8rem;color:var(--muted)}
+@media(max-width:390px){.day-session-right small{max-width:92px}.day-sheet{max-height:88dvh}}

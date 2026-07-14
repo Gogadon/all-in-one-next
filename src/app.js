@@ -1,7 +1,7 @@
 import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';
 
 const app=document.querySelector('#app'),file=document.querySelector('#importFile');
-let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso();
+let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso(),selectedDay=null;const openDaySessions=new Set();
 
 const route=()=>{const p=(location.hash.slice(1)||'/dashboard').split('/').filter(Boolean);return{section:p[0]||'dashboard',moduleId:p[0]==='module'?p[1]:null,view:p[0]==='module'?(p[2]||'overview'):null,id:p[3]||null}};
 const nav=p=>location.hash=p.startsWith('/')?p:'/'+p;
@@ -20,7 +20,7 @@ function shell(title,content,{module=null,back=false,bottom='',dashboard=false}=
       <div class="topbar-side right"><button class="icon" data-action="settings" aria-label="Einstellungen">⚙</button></div>
     </header>
     <main class="content">${content}</main>${bottom}
-  </div>`
+  </div>${daySheetView()}`
 }
 
 function moduleDot(moduleId){
@@ -117,6 +117,132 @@ function statsView(m){
   <div class="stats top">${items}</div>`
 }
 
+function longDate(iso){
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE',{
+    weekday:'long',day:'numeric',month:'long',year:'numeric'
+  });
+}
+
+function strengthVolume(session){
+  let total=0;
+  for(const segment of session.segments||[]){
+    for(const entry of segment.entries||[]){
+      const metrics=entry.metrics||{};
+      const weight=Number(metrics.weight??metrics.gewicht??0);
+      const reps=Number(metrics.repetitions??metrics.wiederholungen??0);
+      if(Number.isFinite(weight)&&Number.isFinite(reps))total+=weight*reps;
+    }
+  }
+  return total;
+}
+
+function sessionTitle(session,module){
+  return session.title||session.name||
+    (session.moduleId==='strength'?'Krafttraining':module?.singular||'Aktivität');
+}
+
+function sessionSummary(session,module){
+  if(session.moduleId==='strength'){
+    const volume=strengthVolume(session);
+    const exercises=(session.segments||[]).length;
+    const parts=[];
+    if(exercises)parts.push(`${exercises} ${exercises===1?'Übung':'Übungen'}`);
+    if(volume>0)parts.push(`${Math.round(volume).toLocaleString('de-DE')} kg`);
+    return parts.join(' · ');
+  }
+  const metrics=sessionMetrics(session);
+  const preferred=module?.listMetrics||['distance','duration','elevation'];
+  return preferred.filter(type=>metrics[type]!=null)
+    .map(type=>formatMetric(type,metrics[type])).join(' · ');
+}
+
+function metricLabel(type){
+  return METRICS[type]?.label||({
+    gewicht:'Gewicht',wiederholungen:'Wiederholungen',saetze:'Sätze',
+    distanz:'Distanz',dauer:'Dauer',hoehenmeter:'Höhenmeter'
+  }[type]||type);
+}
+
+function genericMetricValue(type,value){
+  if(METRICS[type])return formatMetric(type,value);
+  if(type==='gewicht')return `${Number(value).toLocaleString('de-DE')} kg`;
+  return Number.isFinite(value)?Number(value).toLocaleString('de-DE'):String(value);
+}
+
+function daySessionDetails(session,module){
+  if(session.moduleId!=='strength'){
+    const metrics=sessionMetrics(session);
+    const rows=Object.entries(metrics).map(([type,value])=>`
+      <div class="day-detail-row">
+        <span>${esc(metricLabel(type))}</span>
+        <strong>${esc(genericMetricValue(type,value))}</strong>
+      </div>`).join('');
+    return `<div class="day-session-details">${rows||'<p class="day-empty-small">Keine Messwerte gespeichert.</p>'}${session.note?`<p class="day-note">${esc(session.note)}</p>`:''}</div>`;
+  }
+
+  const segments=(session.segments||[]).map((segment,index)=>{
+    const name=segment.name||segment.title||segment.activityName||`Übung ${index+1}`;
+    const entries=segment.entries||[];
+    const completed=entries.filter(entry=>entry.status!=='skipped');
+    const lines=completed.map((entry,entryIndex)=>{
+      const metrics=entry.metrics||{};
+      const shown=Object.entries(metrics).map(([type,value])=>`${metricLabel(type)}: ${genericMetricValue(type,value)}`).join(' · ');
+      return `<div class="day-set"><span>Satz ${entryIndex+1}</span><strong>${esc(shown||'erledigt')}</strong></div>`;
+    }).join('');
+    return `<div class="day-exercise">
+      <div class="day-exercise-title"><span class="calendar-dot" style="--dot:${module?.color||'var(--strength)'}"></span><strong>${esc(name)}</strong></div>
+      ${lines||'<small>Keine Satzwerte gespeichert.</small>'}
+    </div>`;
+  }).join('');
+
+  return `<div class="day-session-details">${segments||'<p class="day-empty-small">Keine Übungen gespeichert.</p>'}${session.note?`<p class="day-note">${esc(session.note)}</p>`:''}</div>`;
+}
+
+function daySheetView(){
+  if(!selectedDay)return'';
+  const state=getState();
+  const today=todayIso();
+  const sessions=state.sessions
+    .filter(session=>session.status==='completed'&&session.date===selectedDay)
+    .toSorted((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+
+  const face=selectedDay===today?'today':selectedDay>today?'future':'past';
+  let badge='';
+  if(face==='today')badge='<span class="day-badge today">Heute</span>';
+  if(face==='future')badge='<span class="day-badge future">Vorschau</span>';
+
+  const body=sessions.length?sessions.map(session=>{
+    const module=getModule(session.moduleId);
+    const open=openDaySessions.has(session.id);
+    return `<article class="day-session" style="--session-color:${module?.color||'#929BA8'}">
+      <button class="day-session-head" data-action="calendar.session" data-id="${session.id}">
+        <span class="day-session-title">
+          <span class="calendar-dot large" style="--dot:${module?.color||'#929BA8'}"></span>
+          <span><strong>${esc(sessionTitle(session,module))}</strong><small>${esc(module?.label||session.moduleId||'Aktivität')}</small></span>
+        </span>
+        <span class="day-session-right">
+          <small>${esc(sessionSummary(session,module))}</small>
+          <b class="${open?'open':''}">›</b>
+        </span>
+      </button>
+      ${open?daySessionDetails(session,module):''}
+    </article>`;
+  }).join(''):`<div class="day-empty">
+    <span>${face==='future'?'○':'·'}</span>
+    <p>${face==='today'?'Heute noch nichts eingetragen.':face==='future'?'Für diesen Tag ist noch nichts geplant.':'An diesem Tag war nichts eingetragen.'}</p>
+  </div>`;
+
+  return `<div class="sheet-backdrop open" data-action="calendar.close"></div>
+    <section class="day-sheet open" role="dialog" aria-modal="true">
+      <div class="day-sheet-handle"><span></span></div>
+      <header class="day-sheet-header">
+        <div><h2>${esc(longDate(selectedDay))}</h2>${badge}</div>
+        <button class="icon" data-action="calendar.close" aria-label="Schließen">×</button>
+      </header>
+      <div class="day-sheet-body">${body}</div>
+    </section>`;
+}
+
 function settings(){
   return`<section class="module-hero neutral"><div class="module-hero__icon">⚙</div><div><span class="eyebrow">App</span><h1>Einstellungen</h1><p>Daten und Sicherungen</p></div></section>
   <div class="settings">
@@ -159,7 +285,9 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='settings')nav('/settings');
   else if(a==='calendar.open'){calendarAnchor=todayIso();nav('/calendar')}
   else if(a==='calendar.shift'){calendarAnchor=shiftPeriod('month',calendarAnchor,Number(el.dataset.step));render()}
-  else if(a==='calendar.day'){toast(new Date(el.dataset.date+'T00:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}))}
+  else if(a==='calendar.day'){selectedDay=el.dataset.date;openDaySessions.clear();render()}
+  else if(a==='calendar.close'){selectedDay=null;openDaySessions.clear();render()}
+  else if(a==='calendar.session'){openDaySessions.has(el.dataset.id)?openDaySessions.delete(el.dataset.id):openDaySessions.add(el.dataset.id);render()}
   else if(a==='module')nav(`/module/${el.dataset.module}/overview`);
   else if(a==='mview')nav(`/module/${r.moduleId}/${el.dataset.view}`);
   else if(a==='tour.new'){newTour(m);nav(`/module/${m.id}/edit`)}

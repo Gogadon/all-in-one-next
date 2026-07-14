@@ -39,3 +39,13 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - modulspezifische Wochenzeilen
 - Wochenkalender mit Farbpunkten
 - Monatskalender mit Navigation und Legende
+
+
+## Kalender-Update v4
+
+- Antippen eines Tages öffnet ein Bottom-Sheet.
+- Vergangene und heutige Tage zeigen abgeschlossene Sessions aller Module.
+- Sessions lassen sich einzeln aufklappen.
+- Rad und Wandern zeigen alle gespeicherten Messwerte.
+- Kraftsessions werden generisch mit Übungen, Satzwerten und Volumen dargestellt.
+- Zukünftige Tage besitzen einen neutralen Vorschauzustand.
