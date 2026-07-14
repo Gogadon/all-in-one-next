@@ -1,4 +1,20 @@
-export const METRICS={duration:{label:'Dauer',unit:'',agg:'sum',display:'duration'},distance:{label:'Distanz',unit:'km',agg:'sum',display:'distance',decimals:1},elevation:{label:'Höhenmeter',unit:'hm',agg:'sum'},steps:{label:'Schritte',unit:'',agg:'sum'},calories:{label:'Kalorien',unit:'kcal',agg:'sum'},averageSpeed:{label:'Ø Geschwindigkeit',unit:'km/h',agg:'average',decimals:1},maxSpeed:{label:'Max. Geschwindigkeit',unit:'km/h',agg:'max',decimals:1},averageHeartRate:{label:'Ø Puls',unit:'bpm',agg:'average'},maxHeartRate:{label:'Max. Puls',unit:'bpm',agg:'max'}};
+export const METRICS={
+duration:{label:'Dauer',unit:'',agg:'sum',display:'duration'},
+distance:{label:'Distanz',unit:'km',agg:'sum',display:'distance',decimals:1},
+elevation:{label:'Höhenmeter',unit:'hm',agg:'sum'},
+steps:{label:'Schritte',unit:'',agg:'sum'},
+calories:{label:'Kalorien',unit:'kcal',agg:'sum'},
+averageSpeed:{label:'Ø Geschwindigkeit',unit:'km/h',agg:'average',decimals:1},
+maxSpeed:{label:'Max. Geschwindigkeit',unit:'km/h',agg:'max',decimals:1},
+averageHeartRate:{label:'Ø Puls',unit:'bpm',agg:'average'},
+maxHeartRate:{label:'Max. Puls',unit:'bpm',agg:'max'},
+averagePower:{label:'Ø Leistung',unit:'W',agg:'average'},
+cadence:{label:'Trittfrequenz',unit:'rpm',agg:'average'},
+weight:{label:'Gewicht',unit:'kg',agg:'max',decimals:1},
+repetitions:{label:'Wiederholungen',unit:'',agg:'sum'},
+repetitionsLeft:{label:'Wdh links',unit:'',agg:'sum'},
+repetitionsRight:{label:'Wdh rechts',unit:'',agg:'sum'}
+};
 export const id=(p='id')=>globalThis.crypto?.randomUUID?`${p}_${crypto.randomUUID()}`:`${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 export const todayIso=(d=new Date())=>{const p=n=>String(n).padStart(2,'0');return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
 export const isoDate=s=>{const[y,m,d]=String(s).slice(0,10).split('-').map(Number);return new Date(Date.UTC(y,m-1,d))};

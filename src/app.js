@@ -1,4 +1,4 @@
-import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';
+import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{strengthOverview,strengthEditorView,strengthDetailView,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,setSetMetric,saveStrength,deleteStrength}from'./strength.js';
 
 const app=document.querySelector('#app'),file=document.querySelector('#importFile');
 let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso(),selectedDay=null;const openDaySessions=new Set();
@@ -40,7 +40,7 @@ function dashboard(){
       const open=state.challenges.length;
       meta=open?`${open} ${open===1?'Ziel':'Ziele'} aktiv`:'Keine Ziele';
     }else{
-      meta='Kraft-Engine vorbereitet';
+      const count=completedSessions(state,'strength').length;meta=count?`${count} ${count===1?'Training':'Trainings'}`:'Noch kein Training';
     }
     return`<button class="dashboard-module" style="--module:${m.color}" data-action="module" data-module="${m.id}">
       <span class="dashboard-module__top"><span>${m.icon}</span><b>${esc(m.label)}</b></span>
@@ -253,12 +253,9 @@ function settings(){
 }
 
 function moduleBottom(m,view){
-  if(m.type!=='tour')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="active">${m.icon}<span>${esc(m.label)}</span></button></nav>`;
-  return`<nav class="bottom">
-    <button data-action="home">⌂<span>Start</span></button>
-    <button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">${m.icon}<span>Touren</span></button>
-    <button class="${view==='statistics'?'active':''}" data-action="mview" data-view="statistics">▥<span>Statistik</span></button>
-  </nav>`
+ if(m.type==='strength')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">🏋️<span>Training</span></button><button class="${view==='plan'?'active':''}" data-action="mview" data-view="plan">▤<span>Plan</span></button></nav>`;
+ if(m.type!=='tour')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="active">${m.icon}<span>${esc(m.label)}</span></button></nav>`;
+ return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">${m.icon}<span>Touren</span></button><button class="${view==='statistics'?'active':''}" data-action="mview" data-view="statistics">▥<span>Statistik</span></button></nav>`
 }
 
 function render(){
@@ -275,7 +272,7 @@ function render(){
     else if(r.view==='statistics')c=statsView(m);
     else c=overview(getState(),m);
   }else if(m.type==='challenge')c=challengeView(getState(),todayIso());
-  else c=`<section class="module-hero"><div class="module-hero__icon">${m.icon}</div><div><span class="eyebrow">Kraft</span><h1>Kraftmodul</h1><p>Das nächste große Modul</p></div></section><div class="card feature-card"><span class="feature-card__mark">01</span><div><h2>Fundament steht</h2><p>Übungen, Sätze, Plan, Zyklus und Progression werden hier als eigene Engine ergänzt.</p></div></div>`;
+  else if(m.type==='strength'){if(r.view==='edit')c=strengthEditorView(getState());else if(r.view==='detail')c=strengthDetailView(getState(),r.id);else if(r.view==='plan')c=`<section class="module-hero"><div class="module-hero__icon">▤</div><div><span class="eyebrow">Kraft</span><h1>Plan & Zyklus</h1><p>Nächste Kraft-Etappe</p></div></section><div class="card"><h2>Planstruktur vorbereitet</h2><p class="muted">Der importierte Plan bleibt erhalten. Editor, Zyklusanker und Progression folgen als eigene Etappe.</p></div>`;else c=strengthOverview(getState());}
   app.innerHTML=shell(m.label,c,{module:m,back:r.view==='edit'||r.view==='detail',bottom:moduleBottom(m,r.view)})
 }
 
@@ -291,14 +288,29 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='calendar.session'){openDaySessions.has(el.dataset.id)?openDaySessions.delete(el.dataset.id):openDaySessions.add(el.dataset.id);render()}
   else if(a==='module')nav(`/module/${el.dataset.module}/overview`);
   else if(a==='mview')nav(`/module/${r.moduleId}/${el.dataset.view}`);
-  else if(a==='tour.new'){newTour(m);nav(`/module/${m.id}/edit`)}
+  else if(a==='tour.new'){newTour(getState(),m);nav(`/module/${m.id}/edit`)}
   else if(a==='tour.open')nav(`/module/${m.id}/detail/${el.dataset.id}`);
-  else if(a==='tour.edit'){const s=getState().sessions.find(x=>x.id===el.dataset.id);editTour(s);nav(`/module/${m.id}/edit`)}
+  else if(a==='tour.edit'){const s=getState().sessions.find(x=>x.id===el.dataset.id);editTour(getState(),m,s);nav(`/module/${m.id}/edit`)}
   else if(a==='tour.cancel'){cancelEdit();history.back()}
   else if(a==='tour.save'){await updateState(s=>saveTour(s),{snapshot:true,reason:'before-tour-save'});toast('Gespeichert ✓');nav(`/module/${m.id}/overview`)}
   else if(a==='tour.delete'){if(confirm('Tour wirklich löschen?')){await updateState(s=>deleteTour(s,el.dataset.id),{snapshot:true,reason:'before-delete'});nav(`/module/${m.id}/overview`)}}
   else if(a==='stat.type'){statType=el.dataset.type;render()}
   else if(a==='stat.shift'){statAnchor=shiftPeriod(statType,statAnchor,Number(el.dataset.step));render()}
+  else if(a==='tour.metric.add'){await updateState(s=>addOptionalMetric(s,m,el.dataset.type));render()}
+  else if(a==='tour.metric.remove'){await updateState(s=>removeOptionalMetric(s,m,el.dataset.type));render()}
+  else if(a==='tour.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Tour nicht gefunden.');const r=await shareCard(tourShareData(s,m,m.color,formatDate,sessionMetrics(s)),`${m.share.filename}-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
+  else if(a==='strength.new'){newStrength();nav('/module/strength/edit')}
+  else if(a==='strength.open')nav(`/module/strength/detail/${el.dataset.id}`)
+  else if(a==='strength.edit'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');editStrength(s);nav('/module/strength/edit')}
+  else if(a==='strength.cancel'){cancelStrength();history.back()}
+  else if(a==='strength.exercise.add'){const id=document.querySelector('#strengthExercise')?.value;if(!id)throw Error('Wähle eine Übung aus.');addExercise(getState(),id);render()}
+  else if(a==='strength.exercise.remove'){removeExercise(el.dataset.segment);render()}
+  else if(a==='strength.set.add'){addSet(el.dataset.segment);render()}
+  else if(a==='strength.set.remove'){removeSet(el.dataset.segment,el.dataset.set);render()}
+  else if(a==='strength.warmup'){toggleWarmup(el.dataset.segment,el.dataset.set);render()}
+  else if(a==='strength.save'){await updateState(s=>saveStrength(s),{snapshot:true,reason:'before-strength-save'});toast('Training gespeichert ✓');nav('/module/strength/overview')}
+  else if(a==='strength.delete'){if(confirm('Training wirklich löschen?')){await updateState(s=>deleteStrength(s,el.dataset.id),{snapshot:true,reason:'before-strength-delete'});nav('/module/strength/overview')}}
+  else if(a==='strength.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');const r=await shareCard(strengthShareData(s,getModule('strength').color,formatDate),`all-in-one-training-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
   else if(a==='challenge.add'){const type=document.querySelector('#challengeType').value,target=parseNumber(document.querySelector('#challengeTarget').value),period=document.querySelector('#challengePeriod').value;if(!target||target<=0)throw Error('Gültigen Zielwert eintragen.');await updateState(s=>addChallenge(s,{type,target,period}))}
   else if(a==='challenge.delete')await updateState(s=>removeChallenge(s,el.dataset.id));
   else if(a==='backup.export'){const blob=new Blob([exportJson(getState())],{type:'application/json'}),url=URL.createObjectURL(blob),x=document.createElement('a');x.href=url;x.download=`all-in-one-next-${todayIso()}.json`;x.click();URL.revokeObjectURL(url)}
@@ -306,7 +318,7 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='reset'){if(confirm('Wirklich alle Daten löschen?')){await replaceState(emptyState());nav('/dashboard')}}
 })});
 
-document.addEventListener('change',e=>{const el=e.target.closest('[data-change]');if(!el)return;const m=getModule(route().moduleId);if(el.dataset.change==='tour.title')setTitle(el.value);if(el.dataset.change==='tour.metric')setMetric(m,el.dataset.type,el.value)});
+document.addEventListener('change',e=>{const el=e.target.closest('[data-change]');if(!el)return;const m=getModule(route().moduleId);if(el.dataset.change==='tour.title')setTitle(el.value);if(el.dataset.change==='tour.note')setNote(el.value);if(el.dataset.change==='tour.metric')setMetric(m,el.dataset.type,el.value);if(el.dataset.change==='strength.title')setStrengthTitle(el.value);if(el.dataset.change==='strength.note')setStrengthNote(el.value);if(el.dataset.change==='strength.metric')setSetMetric(el.dataset.segment,el.dataset.set,el.dataset.type,el.value)});
 file.addEventListener('change',()=>safe(async()=>{const f=file.files?.[0];if(!f)return;await replaceState(importJson(await f.text()));file.value='';toast('Backup importiert ✓');nav('/dashboard')}));
 window.addEventListener('hashchange',render);subscribe(render);await loadStore();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);render();
 
