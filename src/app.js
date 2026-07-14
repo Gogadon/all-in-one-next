@@ -1,4 +1,4 @@
-import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{strengthOverview,strengthEditorView,strengthDetailView,strengthProgressView,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,toggleAssistMode,setSetMetric,saveStrength,deleteStrength,setProgressMetric,toggleProgress}from'./strength.js';
+import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{todayView,planView,historyView,startPlannedSession,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,toggleAssistMode,setSetMetric,saveStrength,deleteStrength,skipCurrentUnit,moveCycle,removeCycleItem,correctToday,setHistoryMode,setProgressMetric}from'./strength.js';
 
 const app=document.querySelector('#app'),file=document.querySelector('#importFile');
 let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso(),selectedDay=null;const openDaySessions=new Set();
@@ -253,7 +253,12 @@ function settings(){
 }
 
 function moduleBottom(m,view){
- if(m.type==='strength')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">🏋️<span>Training</span></button><button class="${view==='progress'?'active':''}" data-action="mview" data-view="progress">↗<span>Fortschritt</span></button><button class="${view==='plan'?'active':''}" data-action="mview" data-view="plan">▤<span>Plan</span></button></nav>`;
+ if(m.type==='strength')return`<nav class="bottom">
+<button data-action="home">⌂<span>Start</span></button>
+<button class="${view==='today'||view==='edit'?'active':''}" data-action="mview" data-view="today">🏋️<span>Heute</span></button>
+<button class="${view==='plan'?'active':''}" data-action="mview" data-view="plan">▤<span>Plan</span></button>
+<button class="${view==='history'?'active':''}" data-action="mview" data-view="history">◷<span>Verlauf</span></button>
+</nav>`;
  if(m.type!=='tour')return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="active">${m.icon}<span>${esc(m.label)}</span></button></nav>`;
  return`<nav class="bottom"><button data-action="home">⌂<span>Start</span></button><button class="${view==='overview'?'active':''}" data-action="mview" data-view="overview">${m.icon}<span>Touren</span></button><button class="${view==='statistics'?'active':''}" data-action="mview" data-view="statistics">▥<span>Statistik</span></button></nav>`
 }
@@ -272,7 +277,12 @@ function render(){
     else if(r.view==='statistics')c=statsView(m);
     else c=overview(getState(),m);
   }else if(m.type==='challenge')c=challengeView(getState(),todayIso());
-  else if(m.type==='strength'){if(r.view==='edit')c=strengthEditorView(getState());else if(r.view==='detail')c=strengthDetailView(getState(),r.id);else if(r.view==='progress')c=strengthProgressView(getState());else if(r.view==='plan')c=`<section class="module-hero"><div class="module-hero__icon">▤</div><div><span class="eyebrow">Kraft</span><h1>Plan & Zyklus</h1><p>Nächste Kraft-Etappe</p></div></section><div class="card"><h2>Planstruktur vorbereitet</h2><p class="muted">Der importierte Plan bleibt erhalten. Editor, Zyklusanker und Progression folgen als eigene Etappe.</p></div>`;else c=strengthOverview(getState());}
+  else if(m.type==='strength'){
+    if(r.view==='edit'||r.view==='today')c=todayView(getState());
+    else if(r.view==='plan')c=planView(getState());
+    else if(r.view==='history')c=historyView(getState());
+    else c=todayView(getState());
+  }
   app.innerHTML=shell(m.label,c,{module:m,back:r.view==='edit'||r.view==='detail',bottom:moduleBottom(m,r.view)})
 }
 
@@ -300,6 +310,8 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='tour.metric.remove'){await updateState(s=>removeOptionalMetric(s,m,el.dataset.type));render()}
   else if(a==='tour.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Tour nicht gefunden.');const r=await shareCard(tourShareData(s,m,m.color,formatDate,sessionMetrics(s)),`${m.share.filename}-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
   else if(a==='strength.new'){newStrength();nav('/module/strength/edit')}
+  else if(a==='strength.planned.start'){startPlannedSession(getState(),el.dataset.id);nav('/module/strength/edit')}
+  else if(a==='strength.skip'){await updateState(state=>skipCurrentUnit(state),{snapshot:true,reason:'before-cycle-skip'});toast('Einheit übersprungen ✓');render()}
   else if(a==='strength.open')nav(`/module/strength/detail/${el.dataset.id}`)
   else if(a==='strength.edit'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');editStrength(s);nav('/module/strength/edit')}
   else if(a==='strength.cancel'){cancelStrength();history.back()}
@@ -314,6 +326,13 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='strength.save'){await updateState(s=>saveStrength(s),{snapshot:true,reason:'before-strength-save'});toast('Training gespeichert ✓');nav('/module/strength/overview')}
   else if(a==='strength.delete'){if(confirm('Training wirklich löschen?')){await updateState(s=>deleteStrength(s,el.dataset.id),{snapshot:true,reason:'before-strength-delete'});nav('/module/strength/overview')}}
   else if(a==='strength.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');const r=await shareCard(strengthShareData(s,getModule('strength').color,formatDate),`all-in-one-training-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
+  else if(a==='history.mode'){setHistoryMode(el.dataset.mode);render()}
+  else if(a==='progress.metric'){setProgressMetric(el.dataset.metric);render()}
+  else if(a==='plan.up'){await updateState(state=>moveCycle(state,Number(el.dataset.index),-1));render()}
+  else if(a==='plan.down'){await updateState(state=>moveCycle(state,Number(el.dataset.index),1));render()}
+  else if(a==='plan.remove'){await updateState(state=>removeCycleItem(state,Number(el.dataset.index)),{snapshot:true,reason:'before-cycle-remove'});render()}
+  else if(a==='plan.correct-today'){await updateState(state=>correctToday(state,0));toast('Heute auf Zyklusposition 1 gesetzt ✓');render()}
+  else if(a==='plan.add-cycle'||a==='plan.unit.new'||a==='plan.unit.edit'||a==='plan.unit.delete'||a==='library.open'){toast('Editor folgt in der nächsten Plan-Etappe.')}
   else if(a==='challenge.add'){const type=document.querySelector('#challengeType').value,target=parseNumber(document.querySelector('#challengeTarget').value),period=document.querySelector('#challengePeriod').value;if(!target||target<=0)throw Error('Gültigen Zielwert eintragen.');await updateState(s=>addChallenge(s,{type,target,period}))}
   else if(a==='challenge.delete')await updateState(s=>removeChallenge(s,el.dataset.id));
   else if(a==='backup.export'){const blob=new Blob([exportJson(getState())],{type:'application/json'}),url=URL.createObjectURL(blob),x=document.createElement('a');x.href=url;x.download=`all-in-one-next-${todayIso()}.json`;x.click();URL.revokeObjectURL(url)}

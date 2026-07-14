@@ -76,3 +76,19 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - Fortschrittsbereich mit Top-Gewicht, Durchschnittsgewicht und Übungsvolumen
 - Wochenvolumen als Balkendiagramm
 - aufklappbarer vollständiger Satzverlauf
+
+
+## Kraft-Struktur-Update v8
+
+- Navigation wieder als Start, Heute, Plan und Verlauf
+- Start führt ausschließlich zum globalen Dashboard
+- Heute zeigt nur nächste oder laufende Einheit
+- manuelles Überspringen einer Einheit
+- Rest- und Active-Rest-Einheiten werden automatisch übersprungen
+- geplante und freie Sessions
+- Planansicht mit Zyklus und Einheitenbibliothek
+- Übungen bleiben in einer separaten, wiederverwendbaren Bibliothek
+- Alternativen bleiben Beziehungen zwischen Übungen
+- Verlauf und Fortschritt als Umschalter im selben Bereich
+- Cardioaktivitäten im Krafttraining verwenden ihre eigenen Messwerte
+- Laufband, Fahrrad und weitere Cardiosegmente werden nicht als Kraftsätze dargestellt

@@ -45,3 +45,17 @@ test('Assistiertes Volumen zählt nicht als bewegtes Gewicht',async()=>{
   const{setVolume}=await import('../src/strength.js');
   assert.equal(setVolume({metrics:{weight:-15,repetitions:12},flags:[]}),0);
 });
+
+
+test('Rest Day wird bei der nächsten Trainingseinheit übersprungen',async()=>{
+  const{nextTrainingUnit}=await import('../src/strength.js');
+  const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},zyklus:[{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'rest',name:'Active Rest',segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};
+  assert.equal(nextTrainingUnit(state,'2026-07-14').unit.id,'upper');
+});
+
+test('Manuelles Überspringen setzt den Anker auf die nächste echte Einheit',async()=>{
+  const{skipCurrentUnit}=await import('../src/strength.js');
+  const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},position:0,zyklus:[{einheitId:'legs'},{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'legs',name:'Beine',segmente:[]},{id:'rest',name:'Rest Day',segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};
+  skipCurrentUnit(state);
+  assert.equal(state.plans[0].legacyData.anker.index,2);
+});
