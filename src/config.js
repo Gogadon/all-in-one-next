@@ -1,0 +1,1 @@
+export const CONFIG={name:'All-in-One Next',version:'0.1.0',dbName:'all-in-one-next',dbVersion:1,stateKey:'main',fallbackKey:'aio_next_state',maxSnapshots:20};export const COLORS={strength:'#C8F43D',cycling:'#45D6F5',hiking:'#FFB84D',challenge:'#FF6D91'};

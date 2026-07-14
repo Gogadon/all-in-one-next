@@ -1,0 +1,16 @@
+{
+  "name": "All-in-One Next",
+  "short_name": "All-in-One",
+  "start_url": "./#/dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090B0E",
+  "theme_color": "#090B0E",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
