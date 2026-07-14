@@ -47,15 +47,9 @@ test('Assistiertes Volumen zählt nicht als bewegtes Gewicht',async()=>{
 });
 
 
-test('Rest Day wird bei der nächsten Trainingseinheit übersprungen',async()=>{
-  const{nextTrainingUnit}=await import('../src/strength.js');
-  const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},zyklus:[{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'rest',name:'Active Rest',segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};
-  assert.equal(nextTrainingUnit(state,'2026-07-14').unit.id,'upper');
-});
 
-test('Manuelles Überspringen setzt den Anker auf die nächste echte Einheit',async()=>{
-  const{skipCurrentUnit}=await import('../src/strength.js');
-  const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},position:0,zyklus:[{einheitId:'legs'},{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'legs',name:'Beine',segmente:[]},{id:'rest',name:'Rest Day',segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};
-  skipCurrentUnit(state);
-  assert.equal(state.plans[0].legacyData.anker.index,2);
-});
+test('Manuelles Überspringen setzt den Anker auf die nächste Zyklusposition',async()=>{const{skipCurrentUnit}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},position:0,zyklus:[{einheitId:'legs'},{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'legs',name:'Beine',segmente:[]},{id:'rest',name:'Rest Day',restDay:true,segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};skipCurrentUnit(state);assert.equal(state.plans[0].legacyData.anker.index,1)});
+
+test('Rest Day bleibt am aktuellen Tag sichtbar',async()=>{const{nextTrainingUnit}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},zyklus:[{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'rest',name:'Active Rest',restDay:true,segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};assert.equal(nextTrainingUnit(state,'2026-07-14').unit.id,'rest')});
+test('Am Folgetag steht nach einem Rest Day automatisch die nächste Einheit an',async()=>{const{nextTrainingUnit}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},zyklus:[{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'rest',name:'Active Rest',restDay:true,segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};assert.equal(nextTrainingUnit(state,'2026-07-15').unit.id,'upper')});
+test('Heute korrigieren setzt die ausgewählte Zyklusposition',async()=>{const{correctToday}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},position:0,zyklus:[{einheitId:'a'},{einheitId:'b'},{einheitId:'c'}],einheiten:[{id:'a',name:'A'},{id:'b',name:'B'},{id:'c',name:'C'}]}}]};correctToday(state,2);assert.equal(state.plans[0].legacyData.anker.index,2)});

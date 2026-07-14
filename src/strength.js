@@ -4,6 +4,7 @@ import{lineChart,barChart,trend}from'./charts.js';
 let editor=null;
 let historyMode='history';
 let progressMetric='top';
+let correctTodayPickerOpen=false;
 const expandedProgress=new Set();
 
 const clone=value=>structuredClone(value);
@@ -26,8 +27,10 @@ function normalizeLegacyPlan(plan){
 }
 
 function isRestUnit(unit){
-  const text=`${unit?.name??''}`.toLowerCase();
-  return text.includes('rest')||text.includes('ruhe')||text.includes('regeneration');
+  if(!unit)return false;
+  if(unit.restDay===true||unit.type==='rest'||unit.typ==='rest')return true;
+  const text=`${unit.name??''}`.toLowerCase();
+  return text.includes('rest day')||text==='rest'||text.includes('ruhetag');
 }
 
 function cycleIndexForDate(plan,date=todayIso()){
@@ -66,14 +69,7 @@ export function currentCycleUnit(state,date=todayIso()){
 }
 
 export function nextTrainingUnit(state,date=todayIso()){
-  const current=currentCycleUnit(state,date);
-  if(!current)return null;
-  if(!isRestUnit(current.unit))return current;
-  const index=nextExecutableIndex(current.plan,current.index+1);
-  if(index==null)return null;
-  const item=cycle(current.plan)[index];
-  const unit=planUnitById(current.plan,item?.einheitId??item?.unitId??item);
-  return{plan:current.plan,index,item,unit,autoSkippedRest:true};
+  return currentCycleUnit(state,date);
 }
 
 function advanceAnchor(plan,index,date=todayIso()){
@@ -85,16 +81,10 @@ export function skipCurrentUnit(state){
   const current=currentCycleUnit(state);
   if(!current)throw Error('Keine Einheit im Zyklus.');
   const items=cycle(current.plan);
-  let index=(current.index+1)%items.length;
-  const visited=new Set();
-  while(!visited.has(index)){
-    visited.add(index);
-    const unit=planUnitById(current.plan,items[index]?.einheitId??items[index]?.unitId??items[index]);
-    if(unit&&!isRestUnit(unit))break;
-    index=(index+1)%items.length;
-  }
-  advanceAnchor(current.plan,index);
-  return index;
+  if(!items.length)throw Error('Der Zyklus ist leer.');
+  const next=(current.index+1)%items.length;
+  advanceAnchor(current.plan,next);
+  return next;
 }
 
 function activitySettings(activity){return activity?.settings??{}}
@@ -281,12 +271,13 @@ export function todayView(state){
       <div class="card today-card"><h2>Noch kein Plan</h2><p class="muted">Lege im Plan-Tab deine Einheiten und den Zyklus an – oder starte spontan.</p>
       <button class="button primary top" data-action="strength.new">Freie Session starten</button></div>`;
   }
-  return`<section class="today-hero">
-    <span class="eyebrow">● Nächste Einheit</span>
+  const rest=isRestUnit(current.unit);
+  const exerciseCount=(current.unit.segmente??current.unit.uebungen??[]).length;
+  return`<section class="today-hero ${rest?'rest-day':''}">
+    <span class="eyebrow">${rest?'☾ Rest Day':'● Nächste Einheit'}</span>
     <h1>${esc(current.unit.name)}</h1>
-    <p>${(current.unit.segmente??current.unit.uebungen??[]).length} Übungen im Plan${current.autoSkippedRest?' · Rest Day automatisch übersprungen':''}</p>
-    <div class="today-actions"><button class="button primary" data-action="strength.planned.start" data-id="${current.unit.id}">Jetzt starten</button>
-    <button class="button" data-action="strength.skip">Überspringen ›</button></div>
+    <p>${rest?(exerciseCount?`${exerciseCount} Aktivitäten im Plan · heute optional durchführen`:'Regenerationstag · morgen geht der Zyklus automatisch weiter'):`${exerciseCount} Übungen im Plan`}</p>
+    ${exerciseCount?`<div class="today-actions"><button class="button primary" data-action="strength.planned.start" data-id="${current.unit.id}">${rest?'Rest Day starten':'Jetzt starten'}</button><button class="button" data-action="strength.skip">Überspringen ›</button></div>`:`<div class="today-actions"><button class="button primary" data-action="strength.rest.complete" data-id="${current.unit.id}">Als erledigt markieren</button><button class="button" data-action="strength.skip">Überspringen ›</button></div>`}
     <button class="button subtle top" data-action="strength.new">Freie Session starten</button>
   </section>`;
 }
@@ -314,13 +305,6 @@ export function saveStrength(state){
   if(editor.mode==='create')state.sessions.push(draft);else{
     const index=state.sessions.findIndex(session=>session.id===draft.id);if(index<0)throw Error('Training nicht gefunden.');state.sessions[index]=draft;
   }
-  if(editor.plannedUnitId){
-    const current=currentCycleUnit(state,draft.date);
-    if(current){
-      const next=(current.index+1)%cycle(current.plan).length;
-      advanceAnchor(current.plan,next,draft.date);
-    }
-  }
   editor=null;return draft;
 }
 export const deleteStrength=(state,id)=>state.sessions=state.sessions.filter(session=>session.id!==id);
@@ -333,15 +317,16 @@ export function planView(state){
   const currentIndex=cycleIndexForDate(plan);
   const cycleRows=cycle(plan).map((item,index)=>{
     const unit=planUnitById(plan,item.einheitId??item.unitId??item);
-    return`<div class="cycle-row ${index===currentIndex?'current':''}">
-      <span class="cycle-number">${index+1}</span><strong>${esc(unit?.name??'Unbekannte Einheit')}</strong>${index===currentIndex?'<small>heute</small>':''}
+    return`<div class="cycle-row ${index===currentIndex?'current':''} ${isRestUnit(unit)?'rest':''}">
+      <span class="cycle-number">${isRestUnit(unit)?'☾':index+1}</span><strong>${esc(unit?.name??'Unbekannte Einheit')}</strong>${index===currentIndex?'<small>heute</small>':''}
       <div class="cycle-actions"><button data-action="plan.up" data-index="${index}">▲</button><button data-action="plan.down" data-index="${index}">▼</button><button data-action="plan.remove" data-index="${index}">×</button></div>
     </div>`;
   }).join('');
-  const units=plan.legacyData.einheiten.map(unit=>`<section class="unit-card">
-    <div><strong>${esc(unit.name)}</strong><small>${(unit.segmente??unit.uebungen??[]).length} Übungen · ${unitUsage(plan,unit.id)}× im Zyklus</small></div>
-    <div><button class="icon small" data-action="plan.unit.edit" data-id="${unit.id}">✎</button><button class="icon small" data-action="plan.unit.delete" data-id="${unit.id}">×</button></div>
+  const units=plan.legacyData.einheiten.map(unit=>`<section class="unit-card ${isRestUnit(unit)?'rest':''}">
+    <div><strong>${isRestUnit(unit)?'☾ ':''}${esc(unit.name)}</strong><small>${(unit.segmente??unit.uebungen??[]).length} Übungen · ${unitUsage(plan,unit.id)}× im Zyklus</small></div>
+    <div class="unit-actions"><button class="rest-toggle ${isRestUnit(unit)?'active':''}" data-action="plan.unit.rest" data-id="${unit.id}">${isRestUnit(unit)?'Rest Day':'Als Rest markieren'}</button><button class="icon small" data-action="plan.unit.edit" data-id="${unit.id}">✎</button><button class="icon small" data-action="plan.unit.delete" data-id="${unit.id}">×</button></div>
   </section>`).join('');
+  const picker=correctTodayPickerOpen?`<div class="picker-backdrop" data-action="plan.correct.close"></div><section class="cycle-picker"><header><div><span class="eyebrow">Heute korrigieren</span><h2>Zyklusposition wählen</h2></div><button class="icon" data-action="plan.correct.close">×</button></header><div class="stack">${cycle(plan).map((item,index)=>{const unit=planUnitById(plan,item.einheitId??item.unitId??item);return`<button class="cycle-choice ${index===currentIndex?'current':''}" data-action="plan.correct.select" data-index="${index}"><span>${isRestUnit(unit)?'☾':index+1}</span><strong>${esc(unit?.name??'Unbekannte Einheit')}</strong>${index===currentIndex?'<small>aktuell</small>':''}</button>`}).join('')}</div></section>`:'';
   return`<section class="module-hero"><div class="module-hero__icon">▤</div><div><span class="eyebrow">Kraft</span><h1>Plan</h1><p>Zyklus und Einheitenbibliothek</p></div></section>
     <p class="section-label">Zyklus · Ablauf</p><section class="cycle-card">${cycleRows||'<p class="empty">Noch kein Zyklus.</p>'}</section>
     <button class="button top" data-action="plan.add-cycle">+ Einheit in den Zyklus</button>
@@ -350,7 +335,7 @@ export function planView(state){
     <div class="stack">${units||'<div class="card empty">Noch keine Einheiten.</div>'}</div>
     <button class="button primary top" data-action="plan.unit.new">+ Einheit anlegen</button>
     <p class="section-label">Übungen · Bibliothek</p>
-    <div class="library-summary"><span>${strengthActivities(state).length} Übungen verfügbar</span><button class="button compact" data-action="library.open">Öffnen</button></div>`;
+    <div class="library-summary"><span>${strengthActivities(state).length} Übungen verfügbar</span><button class="button compact" data-action="library.open">Öffnen</button></div>${picker}`;
 }
 
 export function moveCycle(state,index,direction){
@@ -367,10 +352,24 @@ export function removeCycleItem(state,index){
   if(!items.length){plan.legacyData.anker=null;plan.legacyData.position=0;return}
   const a=anchor(plan);if(a?.index>index)a.index--;else if(a?.index===index)a.index=Math.min(index,items.length-1);
 }
-export function correctToday(state,index=0){
+export function openCorrectTodayPicker(){correctTodayPickerOpen=true}
+export function closeCorrectTodayPicker(){correctTodayPickerOpen=false}
+export function correctToday(state,index){
   const plan=normalizeLegacyPlan(strengthPlan(state));
   if(!cycle(plan).length)return;
-  advanceAnchor(plan,Math.max(0,Math.min(cycle(plan).length-1,index)));
+  advanceAnchor(plan,Math.max(0,Math.min(cycle(plan).length-1,Number(index))));
+  correctTodayPickerOpen=false;
+}
+export function toggleUnitRestDay(state,unitId){
+  const plan=normalizeLegacyPlan(strengthPlan(state));
+  const unit=planUnitById(plan,unitId);if(!unit)return;
+  unit.restDay=!isRestUnit(unit);unit.type=unit.restDay?'rest':'training';
+}
+export function completeRestDay(state,unitId){
+  const plan=normalizeLegacyPlan(strengthPlan(state));
+  const unit=planUnitById(plan,unitId);
+  if(!unit||!isRestUnit(unit))throw Error('Diese Einheit ist kein Rest Day.');
+  state.sessions.push({id:id('session'),moduleId:'strength',date:todayIso(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'completed',title:unit.name,note:'',segments:[],legacy:{planUnitId:unit.id,restDay:true}});
 }
 
 export function historyView(state){

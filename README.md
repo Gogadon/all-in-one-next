@@ -92,3 +92,12 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - Verlauf und Fortschritt als Umschalter im selben Bereich
 - Cardioaktivitäten im Krafttraining verwenden ihre eigenen Messwerte
 - Laufband, Fahrrad und weitere Cardiosegmente werden nicht als Kraftsätze dargestellt
+
+
+## Zyklus- und Rest-Day-Korrektur v9
+- Active Rest Days bleiben am aktuellen Tag sichtbar.
+- Nicht absolvierte Rest Days werden am nächsten Kalendertag automatisch durch die datumsbasierte Zyklusberechnung verlassen.
+- Überspringen gilt für jede aktuelle Einheit.
+- Einheiten können explizit als Rest Day markiert werden.
+- Heute korrigieren öffnet eine Auswahl aller Zykluspositionen.
+- Der Anker wird beim Abschluss nicht mehr doppelt weitergeschaltet.
