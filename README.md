@@ -22,3 +22,11 @@ npm test
 ```
 
 Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. Dieses Projekt ist das neue, saubere Fundament.
+
+
+## Design-Update v2
+
+- kompaktes 2×2-Kachel-Dashboard
+- dauerhafter Start-Button in allen Modulen
+- Start-Tab in der unteren Modulnavigation
+- hochwertigere Modulheader, Listen, Formulare und Statistik-Karten
