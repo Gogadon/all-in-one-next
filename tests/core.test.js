@@ -29,3 +29,5 @@ test('Kalendertag enthält nur abgeschlossene Sessions in den Kernselektoren',()
   assert.equal(completedSessions(state,'cycling').length,1);
   assert.equal(completedSessions(state,'cycling')[0].id,'done');
 });
+
+test('Altes Backup wird vom Importer konvertiert',async()=>{const legacy={app:'all-in-one',schema:2,daten:{bibliothek:[{id:'a1',name:'Radtour',kategorie:'rad',messwerte:['distanz']}],sessions:[{id:'s1',datum:'2026-07-14',modul:'rad',abgeschlossen:true,segmente:[{id:'g1',aktivitaetId:'a1',erledigt:true,eintraege:[{id:'e1',messwerte:{distanz:7500},flags:[],quelle:'import'}]}]}],plaene:{kraft:{einheiten:[]}},challenges:[],einstellungen:{}}};const{importJson}=await import('../src/storage.js');const state=importJson(JSON.stringify(legacy));assert.equal(state.sessions[0].moduleId,'cycling');assert.equal(state.sessions[0].segments[0].entries[0].metrics.distance,7500);assert.equal(state.sessions[0].status,'completed')});

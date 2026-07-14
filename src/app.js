@@ -234,7 +234,7 @@ function daySheetView(){
 
   return `<div class="sheet-backdrop open" data-action="calendar.close"></div>
     <section class="day-sheet open" role="dialog" aria-modal="true">
-      <div class="day-sheet-handle"><span></span></div>
+      <button class="day-sheet-handle" data-action="calendar.close" aria-label="Tagesansicht schließen"><span></span></button>
       <header class="day-sheet-header">
         <div><h2>${esc(longDate(selectedDay))}</h2>${badge}</div>
         <button class="icon" data-action="calendar.close" aria-label="Schließen">×</button>
@@ -262,6 +262,7 @@ function moduleBottom(m,view){
 }
 
 function render(){
+  document.body.classList.toggle('sheet-open',Boolean(selectedDay));
   const r=route();
   if(r.section==='dashboard'){app.innerHTML=shell('All-in-One',dashboard(),{dashboard:true});return}
   if(r.section==='settings'){app.innerHTML=shell('Einstellungen',settings(),{back:true});return}
@@ -308,3 +309,8 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
 document.addEventListener('change',e=>{const el=e.target.closest('[data-change]');if(!el)return;const m=getModule(route().moduleId);if(el.dataset.change==='tour.title')setTitle(el.value);if(el.dataset.change==='tour.metric')setMetric(m,el.dataset.type,el.value)});
 file.addEventListener('change',()=>safe(async()=>{const f=file.files?.[0];if(!f)return;await replaceState(importJson(await f.text()));file.value='';toast('Backup importiert ✓');nav('/dashboard')}));
 window.addEventListener('hashchange',render);subscribe(render);await loadStore();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);render();
+
+let sheetDragStart=null,sheetDragDistance=0;
+document.addEventListener('touchstart',event=>{const h=event.target.closest('.day-sheet-handle');if(!h)return;sheetDragStart=event.touches[0].clientY;sheetDragDistance=0},{passive:true});
+document.addEventListener('touchmove',event=>{if(sheetDragStart==null)return;sheetDragDistance=Math.max(0,event.touches[0].clientY-sheetDragStart);const sheet=document.querySelector('.day-sheet');if(sheet)sheet.style.transform=`translate(-50%,${Math.min(sheetDragDistance,180)}px)`},{passive:true});
+document.addEventListener('touchend',()=>{if(sheetDragStart==null)return;const sheet=document.querySelector('.day-sheet');if(sheetDragDistance>65){selectedDay=null;openDaySessions.clear();render()}else if(sheet){sheet.style.transform=''}sheetDragStart=null;sheetDragDistance=0},{passive:true});
