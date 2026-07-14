@@ -1,10 +1,12 @@
-import{id,todayIso,completedSessions,formatDate,formatNumber,parseNumber,esc,sessionMetrics,METRICS}from'./core.js';
+import{id,todayIso,completedSessions,formatDate,formatNumber,parseNumber,parseDuration,formatMetric,esc,sessionMetrics,METRICS}from'./core.js';
 import{lineChart,barChart,trend}from'./charts.js';
 
 let editor=null;
 let historyMode='history';
 let progressMetric='top';
 let correctTodayPickerOpen=false;
+let pendingCorrectIndex=null;
+let collapsedSegments=new Set();
 const expandedProgress=new Set();
 
 const clone=value=>structuredClone(value);
@@ -140,7 +142,7 @@ function entryTemplateForActivity(activity){
 function segmentFromActivity(state,activityId){
   const activity=activityFor(state,activityId);
   if(!activity)throw Error('Übung nicht gefunden.');
-  return{id:id('segment'),activityId:activity.id,name:activity.name,title:activity.name,status:'completed',
+  return{id:id('segment'),activityId:activity.id,name:activity.name,title:activity.name,status:'active',done:false,
     mode:activity.settings?.assist?'assisted':'external',entries:[entryTemplateForActivity(activity)]};
 }
 
@@ -158,6 +160,7 @@ export function startPlannedSession(state,unitId){
   const plan=normalizeLegacyPlan(strengthPlan(state));
   const unit=planUnitById(plan,unitId);
   if(!unit)throw Error('Einheit nicht gefunden.');
+  collapsedSegments=new Set();
   editor={mode:'create',plannedUnitId:unit.id,draft:{
     id:id('session'),moduleId:'strength',date:todayIso(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
     status:'draft',title:unit.name,note:'',segments:unitSegments(state,unit)
@@ -166,14 +169,21 @@ export function startPlannedSession(state,unitId){
 
 export function newStrength(state=null){
   if(state&&todayStrengthSession(state))throw Error('Für heute existiert bereits eine Kraftsession. Nutze „Heute korrigieren“, um sie zu ersetzen.');
+  collapsedSegments=new Set();
   editor={mode:'create',plannedUnitId:null,draft:{
     id:id('session'),moduleId:'strength',date:todayIso(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
     status:'draft',title:'Freie Session',note:'',segments:[]
   }};
 }
 
-export const editStrength=session=>editor={mode:'edit',plannedUnitId:session.legacy?.planUnitId??null,draft:clone(session)};
-export const cancelStrength=()=>editor=null;
+export const editStrength=session=>{
+  const draft=clone(session);
+  draft.status='draft';
+  for(const segment of draft.segments??[])segment.done=true;
+  collapsedSegments=new Set((draft.segments??[]).map(segment=>segment.id));
+  editor={mode:'edit',plannedUnitId:session.legacy?.planUnitId??null,draft};
+};
+export const cancelStrength=()=>{editor=null;collapsedSegments=new Set()};
 export const setStrengthTitle=value=>{if(editor)editor.draft.title=value};
 export const setStrengthNote=value=>{if(editor)editor.draft.note=value};
 
@@ -202,6 +212,24 @@ export function addExercise(state,activityId){
 
 export const removeExercise=segmentId=>{if(editor)editor.draft.segments=editor.draft.segments.filter(segment=>segment.id!==segmentId)};
 
+export function toggleSegment(segmentId){
+  collapsedSegments.has(segmentId)?collapsedSegments.delete(segmentId):collapsedSegments.add(segmentId);
+}
+export function completeSegment(segmentId){
+  const segment=editor?.draft.segments.find(item=>item.id===segmentId);
+  if(!segment)return;
+  segment.done=true;
+  segment.status='completed';
+  collapsedSegments.add(segmentId);
+}
+export function reopenSegment(segmentId){
+  const segment=editor?.draft.segments.find(item=>item.id===segmentId);
+  if(!segment)return;
+  segment.done=false;
+  segment.status='active';
+  collapsedSegments.delete(segmentId);
+}
+
 export function addSet(segmentId){
   const segment=editor?.draft.segments.find(item=>item.id===segmentId);if(!segment)return;
   const activityType=segment.entries.length?segment.entries.at(-1):null;
@@ -225,7 +253,12 @@ export function toggleAssistMode(segmentId){
 export function setSetMetric(segmentId,setId,type,raw){
   const segment=editor?.draft.segments.find(item=>item.id===segmentId);
   const entry=segment?.entries.find(item=>item.id===setId);if(!entry)return;
-  const value=parseNumber(raw);
+  let value;
+  if(type==='duration')value=parseDuration(raw,'minutes-seconds');
+  else if(type==='distance'){
+    const number=parseNumber(raw);
+    value=number==null?null:Math.round(number*1000);
+  }else value=parseNumber(raw);
   if(value==null){delete entry.metrics[type];return}
   entry.metrics[type]=type==='weight'&&segment.mode==='assisted'?-Math.abs(value):value;
 }
@@ -261,6 +294,37 @@ function formatSet(entry){
   return`${entry.flags?.includes('warmup')?'A ':''}${weightText} × ${reps}`;
 }
 
+
+function cardioSummary(activity,segment){
+  const metrics=segment.entries?.[0]?.metrics??{};
+  const order=activity?.metrics?.length?activity.metrics:Object.keys(metrics);
+  return order.filter(type=>metrics[type]!=null)
+    .map(type=>formatMetric(type,metrics[type]))
+    .join(' · ')||'Noch keine Werte';
+}
+function strengthSegmentSummary(segment){
+  const sets=segment.entries??[];
+  if(!sets.length)return'Noch keine Sätze';
+  const working=sets.filter(entry=>!entry.flags?.includes('warmup'));
+  const top=Math.max(...working.map(entry=>entry.metrics?.weight??-Infinity));
+  const topText=Number.isFinite(top)
+    ?top<0?`${formatNumber(Math.abs(top),1)} kg Hilfe`
+    :top===0?'Körpergewicht'
+    :`${formatNumber(top,1)} kg`
+    :'ohne Gewicht';
+  return`${sets.length} ${sets.length===1?'Satz':'Sätze'} · ${topText}`;
+}
+function segmentHeader(activity,segment,summary){
+  const collapsed=collapsedSegments.has(segment.id);
+  return`<header class="exercise-dropdown">
+    <button class="exercise-toggle" data-action="strength.segment.toggle" data-segment="${segment.id}">
+      <span class="exercise-state ${segment.done?'done':''}">${segment.done?'✓':'•'}</span>
+      <span><strong>${esc(activity.name)}</strong><small>${esc(summary)}</small></span>
+      <b class="${collapsed?'':'open'}">⌄</b>
+    </button>
+    <button class="icon small exercise-remove" data-action="strength.exercise.remove" data-segment="${segment.id}">×</button>
+  </header>`;
+}
 function metricInput(type,value,segmentId,entryId){
   const def=METRICS[type]??{label:type,unit:''};
   let shown=value??'';
@@ -276,10 +340,15 @@ function metricInput(type,value,segmentId,entryId){
 function cardioSegmentHtml(activity,segment){
   const entry=segment.entries[0]??entryTemplateForActivity(activity);
   const metrics=activity.metrics?.length?activity.metrics:['duration','distance','averageHeartRate','maxHeartRate','calories'];
-  return`<section class="strength-exercise cardio-exercise">
-    <header><div><strong>${esc(activity.name)}</strong><small>Cardio / Messwerte</small></div>
-    <button class="icon small" data-action="strength.exercise.remove" data-segment="${segment.id}">×</button></header>
-    <div class="compact-cardio-grid">${metrics.map(type=>metricInput(type,entry.metrics?.[type],segment.id,entry.id)).join('')}</div>
+  const collapsed=collapsedSegments.has(segment.id);
+  return`<section class="strength-exercise cardio-exercise ${segment.done?'done':''}">
+    ${segmentHeader(activity,segment,cardioSummary(activity,segment))}
+    ${collapsed?'':`<div class="exercise-body">
+      <div class="compact-cardio-grid">${metrics.map(type=>metricInput(type,entry.metrics?.[type],segment.id,entry.id)).join('')}</div>
+      <button class="button exercise-complete" data-action="${segment.done?'strength.segment.reopen':'strength.segment.complete'}" data-segment="${segment.id}">
+        ${segment.done?'Wieder öffnen':'Aktivität abschließen ✓'}
+      </button>
+    </div>`}
   </section>`;
 }
 
@@ -297,13 +366,18 @@ function strengthSetRow(activity,segment,entry,index){
 }
 
 function strengthSegmentHtml(state,activity,segment){
-  return`<section class="strength-exercise">
-    <header><div><strong>${esc(activity.name)}</strong><small>${segment.entries.length} Sätze</small></div>
-    <button class="icon small" data-action="strength.exercise.remove" data-segment="${segment.id}">×</button></header>
-    ${activity.settings?.assist?`<button class="assist-toggle ${segment.mode==='assisted'?'active':''}" data-action="strength.assist.toggle" data-segment="${segment.id}">
-      <span>${segment.mode==='assisted'?'Unterstützung':'Körpergewicht / Zusatzgewicht'}</span><b>${segment.mode==='assisted'?'Hilfe aktiv':'ohne Hilfe'}</b></button>`:''}
-    <div class="strength-sets">${segment.entries.map((entry,index)=>strengthSetRow(activity,segment,entry,index)).join('')}</div>
-    <button class="button subtle" data-action="strength.set.add" data-segment="${segment.id}">+ Satz hinzufügen</button>
+  const collapsed=collapsedSegments.has(segment.id);
+  return`<section class="strength-exercise ${segment.done?'done':''}">
+    ${segmentHeader(activity,segment,strengthSegmentSummary(segment))}
+    ${collapsed?'':`<div class="exercise-body">
+      ${activity.settings?.assist?`<button class="assist-toggle ${segment.mode==='assisted'?'active':''}" data-action="strength.assist.toggle" data-segment="${segment.id}">
+        <span>${segment.mode==='assisted'?'Unterstützung':'Körpergewicht / Zusatzgewicht'}</span><b>${segment.mode==='assisted'?'Hilfe aktiv':'ohne Hilfe'}</b></button>`:''}
+      <div class="strength-sets">${segment.entries.map((entry,index)=>strengthSetRow(activity,segment,entry,index)).join('')}</div>
+      <button class="button subtle" data-action="strength.set.add" data-segment="${segment.id}">+ Satz hinzufügen</button>
+      <button class="button exercise-complete" data-action="${segment.done?'strength.segment.reopen':'strength.segment.complete'}" data-segment="${segment.id}">
+        ${segment.done?'Wieder öffnen':'Übung abschließen ✓'}
+      </button>
+    </div>`}
   </section>`;
 }
 
@@ -312,13 +386,24 @@ export function todayView(state){
 
   const completed=todayStrengthSession(state);
   if(completed){
-    return`<section class="today-hero completed">
-      <span class="eyebrow">✓ Heute abgeschlossen</span>
-      <h1>${esc(completed.title||'Krafttraining')}</h1>
-      <p>${esc(sessionSummary(state,completed))}</p>
-      <div class="today-actions">
-        <button class="button primary" data-action="strength.open" data-id="${completed.id}">Training ansehen</button>
-        <button class="button" data-action="plan.correct-today">Heute korrigieren</button>
+    const rows=(completed.segments??[]).map(segment=>{
+      const activity=activityFor(state,segment.activityId);
+      if(!activity)return'';
+      const summary=isCardioActivity(activity)?cardioSummary(activity,segment):strengthSegmentSummary(segment);
+      return`<section class="completed-exercise">
+        <span class="completed-check">✓</span>
+        <div><strong>${esc(activity.name)}</strong><small>${esc(summary)}</small></div>
+      </section>`;
+    }).join('');
+    return`<section class="completed-today">
+      <header>
+        <div><span class="eyebrow">● Erledigt</span><h1>${esc(completed.title||'Krafttraining')}</h1><p>${esc(formatDate(completed.date))}</p></div>
+        <strong>${esc(sessionSummary(state,completed))}</strong>
+      </header>
+      <div class="completed-exercises">${rows||'<div class="card empty">Keine Aktivitäten gespeichert.</div>'}</div>
+      <div class="completed-footer"><b>Einheit abgeschlossen ✓</b>
+        <button class="button" data-action="strength.share" data-id="${completed.id}">Teilen</button>
+        <button class="button" data-action="strength.reopen" data-id="${completed.id}">Wieder öffnen</button>
       </div>
     </section>`;
   }
@@ -364,12 +449,12 @@ export function strengthEditorView(state){
 export function saveStrength(state){
   if(!editor)throw Error('Kein Training geöffnet.');
   if(!editor.draft.segments.length)throw Error('Füge mindestens eine Übung hinzu.');
-  const draft=clone(editor.draft);draft.status='completed';draft.updatedAt=new Date().toISOString();
+  const draft=clone(editor.draft);draft.status='completed';draft.updatedAt=new Date().toISOString();for(const segment of draft.segments??[]){segment.done=true;segment.status='completed'}
   draft.legacy={...(draft.legacy??{}),planUnitId:editor.plannedUnitId};
   if(editor.mode==='create'){removeTodayStrengthSessions(state,draft.date);state.sessions.push(draft);}else{
     const index=state.sessions.findIndex(session=>session.id===draft.id);if(index<0)throw Error('Training nicht gefunden.');state.sessions[index]=draft;
   }
-  editor=null;return draft;
+  editor=null;collapsedSegments=new Set();return draft;
 }
 export const deleteStrength=(state,id)=>state.sessions=state.sessions.filter(session=>session.id!==id);
 
@@ -391,6 +476,17 @@ export function planView(state){
     <div class="unit-actions"><button class="rest-toggle ${isRestUnit(unit)?'active':''}" data-action="plan.unit.rest" data-id="${unit.id}">${isRestUnit(unit)?'Rest Day':'Als Rest markieren'}</button><button class="icon small" data-action="plan.unit.edit" data-id="${unit.id}">✎</button><button class="icon small" data-action="plan.unit.delete" data-id="${unit.id}">×</button></div>
   </section>`).join('');
   const picker=correctTodayPickerOpen?`<div class="picker-backdrop" data-action="plan.correct.close"></div><section class="cycle-picker"><header><div><span class="eyebrow">Heute korrigieren</span><h2>Zyklusposition wählen</h2></div><button class="icon" data-action="plan.correct.close">×</button></header><div class="stack">${cycle(plan).map((item,index)=>{const unit=planUnitById(plan,item.einheitId??item.unitId??item);return`<button class="cycle-choice ${index===currentIndex?'current':''}" data-action="plan.correct.select" data-index="${index}"><span>${isRestUnit(unit)?'☾':index+1}</span><strong>${esc(unit?.name??'Unbekannte Einheit')}</strong>${index===currentIndex?'<small>aktuell</small>':''}</button>`}).join('')}</div></section>`:'';
+  const selectedItem=pendingCorrectIndex==null?null:cycle(plan)[pendingCorrectIndex];
+  const selectedUnit=selectedItem?planUnitById(plan,selectedItem.einheitId??selectedItem.unitId??selectedItem):null;
+  const hasToday=Boolean(todayStrengthSession(state)||editor);
+  const confirmation=pendingCorrectIndex!=null?`<div class="app-dialog-backdrop" data-action="plan.correct.cancel"></div>
+    <section class="app-dialog" role="dialog" aria-modal="true">
+      <span class="eyebrow">Heute korrigieren</span>
+      <h2>${esc(selectedUnit?.name??'Zyklusposition')} für heute setzen?</h2>
+      <p>${hasToday?'Die heutige Einheit wird vollständig verworfen. Danach ist die ausgewählte Einheit im Heute-Tab startbereit.':'Die ausgewählte Einheit wird für heute gesetzt.'}</p>
+      <div class="dialog-actions"><button class="button" data-action="plan.correct.cancel">Abbrechen</button>
+      <button class="button primary" data-action="plan.correct.confirm">Korrigieren</button></div>
+    </section>`:'';
   return`<section class="module-hero"><div class="module-hero__icon">▤</div><div><span class="eyebrow">Kraft</span><h1>Plan</h1><p>Zyklus und Einheitenbibliothek</p></div></section>
     <p class="section-label">Zyklus · Ablauf</p><section class="cycle-card">${cycleRows||'<p class="empty">Noch kein Zyklus.</p>'}</section>
     <button class="button top" data-action="plan.add-cycle">+ Einheit in den Zyklus</button>
@@ -399,7 +495,7 @@ export function planView(state){
     <div class="stack">${units||'<div class="card empty">Noch keine Einheiten.</div>'}</div>
     <button class="button primary top" data-action="plan.unit.new">+ Einheit anlegen</button>
     <p class="section-label">Übungen · Bibliothek</p>
-    <div class="library-summary"><span>${strengthActivities(state).length} Übungen verfügbar</span><button class="button compact" data-action="library.open">Öffnen</button></div>${picker}`;
+    <div class="library-summary"><span>${strengthActivities(state).length} Übungen verfügbar</span><button class="button compact" data-action="library.open">Öffnen</button></div>${picker}${confirmation}`;
 }
 
 export function moveCycle(state,index,direction){
@@ -416,13 +512,23 @@ export function removeCycleItem(state,index){
   if(!items.length){plan.legacyData.anker=null;plan.legacyData.position=0;return}
   const a=anchor(plan);if(a?.index>index)a.index--;else if(a?.index===index)a.index=Math.min(index,items.length-1);
 }
-export function openCorrectTodayPicker(){correctTodayPickerOpen=true}
-export function closeCorrectTodayPicker(){correctTodayPickerOpen=false}
-export function correctToday(state,index){
+export function openCorrectTodayPicker(){correctTodayPickerOpen=true;pendingCorrectIndex=null}
+export function closeCorrectTodayPicker(){correctTodayPickerOpen=false;pendingCorrectIndex=null}
+export function requestCorrectToday(index){pendingCorrectIndex=Number(index)}
+export function cancelCorrectToday(){pendingCorrectIndex=null}
+export function confirmCorrectToday(state){
   const plan=normalizeLegacyPlan(strengthPlan(state));
-  if(!cycle(plan).length)return;
-  advanceAnchor(plan,Math.max(0,Math.min(cycle(plan).length-1,Number(index))));
+  if(!cycle(plan).length||pendingCorrectIndex==null)return null;
+  const selected=Math.max(0,Math.min(cycle(plan).length-1,pendingCorrectIndex));
+  const item=cycle(plan)[selected];
+  const unit=planUnitById(plan,item?.einheitId??item?.unitId??item);
+  removeTodayStrengthSessions(state);
+  editor=null;
+  collapsedSegments=new Set();
+  advanceAnchor(plan,selected);
   correctTodayPickerOpen=false;
+  pendingCorrectIndex=null;
+  return unit?.name??null;
 }
 export function toggleUnitRestDay(state,unitId){
   const plan=normalizeLegacyPlan(strengthPlan(state));
@@ -442,14 +548,14 @@ export function historyView(state){
   const cards=sessions.map(session=>`<section class="history-card">
     <button class="history-head" data-action="strength.open" data-id="${session.id}">
       <span><strong>${esc(session.title||'Krafttraining')}</strong><small>${esc(formatDate(session.date))}</small></span>
-      <b>${formatNumber(strengthVolume(session),0)} kg</b>
+      <b>${esc(sessionSummary(state,session))}</b>
     </button>
     <div class="history-exercises">${(session.segments??[]).map(segment=>{
       const activity=activityFor(state,segment.activityId);
       if(!activity)return'';
       if(isCardioActivity(activity)){
         const m=segment.entries?.[0]?.metrics??{};
-        return`<div><span class="dot muted-dot"></span><span>${esc(activity.name)} ${Object.entries(m).slice(0,4).map(([type,value])=>`${METRICS[type]?.label??type}: ${value}`).join(' · ')}</span></div>`;
+        return`<div><span class="dot muted-dot"></span><span>${esc(activity.name)} · ${esc(cardioSummary(activity,segment))}</span></div>`;
       }
       const sets=segment.entries??[],top=Math.max(...sets.map(entry=>entry.metrics?.weight??0));
       return`<div><span class="dot"></span><span>${esc(activity.name)} ${sets.length} Sätze · ${formatNumber(top,1)} kg</span></div>`;

@@ -113,3 +113,19 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - kompakte Cardiofelder mit bis zu drei Feldern pro Zeile
 - kompaktere Satzfelder
 - dynamische Kopfzusammenfassung für Kraft, Cardio und gemischte Einheiten
+
+
+## Kraft-Paritätsupdate v11
+
+- Cardioeinheiten zeigen im Verlauf Dauer und Distanz statt 0 kg.
+- Cardiomesswerte werden mit Einheiten formatiert.
+- Die abgeschlossene Heute-Ansicht orientiert sich wieder am alten Kraftmodul.
+- Training ansehen und Heute korrigieren wurden dort entfernt.
+- Teilen und Wieder öffnen stehen direkt am Abschlussbereich.
+- Übungen und Cardioaktivitäten sind im Heute-Editor auf- und zuklappbar.
+- Alle Einheiten starten aufgeklappt.
+- Beim Abschließen einer Übung klappt sie automatisch zu.
+- Ein eigener App-Dialog ersetzt das unschöne Browser-OK-Fenster.
+- Heute korrigieren löscht jetzt tatsächlich die heutige offene oder abgeschlossene Kraftsession.
+- Nach der Korrektur ist die gewählte Einheit im Heute-Tab startbereit.
+- Dauer- und Distanzfelder werden beim Eingeben korrekt in Sekunden beziehungsweise Meter umgerechnet.

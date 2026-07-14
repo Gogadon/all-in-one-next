@@ -52,4 +52,11 @@ test('Manuelles Überspringen setzt den Anker auf die nächste Zyklusposition',a
 
 test('Rest Day bleibt am aktuellen Tag sichtbar',async()=>{const{nextTrainingUnit}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},zyklus:[{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'rest',name:'Active Rest',restDay:true,segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};assert.equal(nextTrainingUnit(state,'2026-07-14').unit.id,'rest')});
 test('Am Folgetag steht nach einem Rest Day automatisch die nächste Einheit an',async()=>{const{nextTrainingUnit}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},zyklus:[{einheitId:'rest'},{einheitId:'upper'}],einheiten:[{id:'rest',name:'Active Rest',restDay:true,segmente:[]},{id:'upper',name:'Oberkörper',segmente:[]}]}}]};assert.equal(nextTrainingUnit(state,'2026-07-15').unit.id,'upper')});
-test('Heute korrigieren setzt die ausgewählte Zyklusposition',async()=>{const{correctToday}=await import('../src/strength.js');const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:'2026-07-14',index:0},position:0,zyklus:[{einheitId:'a'},{einheitId:'b'},{einheitId:'c'}],einheiten:[{id:'a',name:'A'},{id:'b',name:'B'},{id:'c',name:'C'}]}}]};correctToday(state,2);assert.equal(state.plans[0].legacyData.anker.index,2)});
+test('Heute korrigieren setzt die ausgewählte Zyklusposition',async()=>{
+  const mod=await import('../src/strength.js');
+  const today=new Date().toISOString().slice(0,10);
+  const state={activities:[],sessions:[],challenges:[],preferences:{},plans:[{moduleId:'strength',legacyData:{anker:{datum:today,index:0},position:0,zyklus:[{einheitId:'a'},{einheitId:'b'},{einheitId:'c'}],einheiten:[{id:'a',name:'A'},{id:'b',name:'B'},{id:'c',name:'C'}]}}]};
+  mod.requestCorrectToday(2);
+  mod.confirmCorrectToday(state);
+  assert.equal(state.plans[0].legacyData.anker.index,2);
+});

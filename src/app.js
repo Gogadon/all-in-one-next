@@ -1,4 +1,4 @@
-import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{todayView,planView,historyView,startPlannedSession,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,toggleAssistMode,setSetMetric,saveStrength,deleteStrength,skipCurrentUnit,moveCycle,removeCycleItem,correctToday,openCorrectTodayPicker,closeCorrectTodayPicker,toggleUnitRestDay,completeRestDay,setHistoryMode,setProgressMetric}from'./strength.js';
+import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setNote,setMetric,addOptionalMetric,removeOptionalMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';import{shareCard,tourShareData,strengthShareData}from'./share.js';import{todayView,planView,historyView,startPlannedSession,newStrength,editStrength,cancelStrength,setStrengthTitle,setStrengthNote,addExercise,removeExercise,addSet,removeSet,toggleWarmup,toggleAssistMode,setSetMetric,toggleSegment,completeSegment,reopenSegment,saveStrength,deleteStrength,skipCurrentUnit,moveCycle,removeCycleItem,openCorrectTodayPicker,closeCorrectTodayPicker,requestCorrectToday,cancelCorrectToday,confirmCorrectToday,toggleUnitRestDay,completeRestDay,setHistoryMode,setProgressMetric}from'./strength.js';
 
 const app=document.querySelector('#app'),file=document.querySelector('#importFile');
 let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso(),selectedDay=null;const openDaySessions=new Set();
@@ -313,16 +313,17 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='strength.planned.start'){startPlannedSession(getState(),el.dataset.id);nav('/module/strength/edit')}
   else if(a==='strength.skip'){await updateState(state=>skipCurrentUnit(state),{snapshot:true,reason:'before-cycle-skip'});toast('Einheit übersprungen ✓');render()}
   else if(a==='strength.open')nav(`/module/strength/detail/${el.dataset.id}`)
-  else if(a==='strength.edit'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');editStrength(s);nav('/module/strength/edit')}
+  else if(a==='strength.edit'||a==='strength.reopen'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');editStrength(s);nav('/module/strength/edit')}
   else if(a==='strength.cancel'){cancelStrength();history.back()}
   else if(a==='strength.exercise.add'){const id=document.querySelector('#strengthExercise')?.value;if(!id)throw Error('Wähle eine Übung aus.');addExercise(getState(),id);render()}
   else if(a==='strength.exercise.remove'){removeExercise(el.dataset.segment);render()}
   else if(a==='strength.set.add'){addSet(el.dataset.segment);render()}
   else if(a==='strength.set.remove'){removeSet(el.dataset.segment,el.dataset.set);render()}
   else if(a==='strength.warmup'){toggleWarmup(el.dataset.segment,el.dataset.set);render()}
+  else if(a==='strength.segment.toggle'){toggleSegment(el.dataset.segment);render()}
+  else if(a==='strength.segment.complete'){completeSegment(el.dataset.segment);render()}
+  else if(a==='strength.segment.reopen'){reopenSegment(el.dataset.segment);render()}
   else if(a==='strength.assist.toggle'){toggleAssistMode(el.dataset.segment);render()}
-  else if(a==='strength.progress.metric'){setProgressMetric(el.dataset.metric);render()}
-  else if(a==='strength.progress.toggle'){toggleProgress(el.dataset.id);render()}
   else if(a==='strength.save'){await updateState(s=>saveStrength(s),{snapshot:true,reason:'before-strength-save'});toast('Training gespeichert ✓');nav('/module/strength/overview')}
   else if(a==='strength.delete'){if(confirm('Training wirklich löschen?')){await updateState(s=>deleteStrength(s,el.dataset.id),{snapshot:true,reason:'before-strength-delete'});nav('/module/strength/overview')}}
   else if(a==='strength.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Training nicht gefunden.');const r=await shareCard(strengthShareData(s,getModule('strength').color,formatDate),`all-in-one-training-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
@@ -333,12 +334,12 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='plan.remove'){await updateState(state=>removeCycleItem(state,Number(el.dataset.index)),{snapshot:true,reason:'before-cycle-remove'});render()}
   else if(a==='plan.correct-today'){openCorrectTodayPicker();render()}
   else if(a==='plan.correct.close'){closeCorrectTodayPicker();render()}
-  else if(a==='plan.correct.select'){
-    const hasToday=getState().sessions.some(session=>session.moduleId==='strength'&&session.date===todayIso());
-    const message=hasToday?'Die heutige Kraftsession wird verworfen und durch die ausgewählte Zyklusposition ersetzt. Fortfahren?':'Die ausgewählte Zyklusposition wird für heute gesetzt. Fortfahren?';
-    if(!confirm(message))return;
-    await updateState(state=>correctToday(state,Number(el.dataset.index)),{snapshot:true,reason:'before-correct-today'});
-    toast('Heutige Zyklusposition korrigiert ✓');
+  else if(a==='plan.correct.select'){requestCorrectToday(Number(el.dataset.index));render()}
+  else if(a==='plan.correct.cancel'){cancelCorrectToday();render()}
+  else if(a==='plan.correct.confirm'){
+    let selectedName=null;
+    await updateState(state=>{selectedName=confirmCorrectToday(state)},{snapshot:true,reason:'before-correct-today'});
+    toast(selectedName?`${selectedName} ist jetzt für heute gesetzt ✓`:'Heute wurde korrigiert ✓');
     nav('/module/strength/today');
   }
   else if(a==='plan.unit.rest'){await updateState(state=>toggleUnitRestDay(state,el.dataset.id));render()}
