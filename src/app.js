@@ -309,7 +309,7 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='tour.metric.add'){await updateState(s=>addOptionalMetric(s,m,el.dataset.type));render()}
   else if(a==='tour.metric.remove'){await updateState(s=>removeOptionalMetric(s,m,el.dataset.type));render()}
   else if(a==='tour.share'){const s=getState().sessions.find(x=>x.id===el.dataset.id);if(!s)throw Error('Tour nicht gefunden.');const r=await shareCard(tourShareData(s,m,m.color,formatDate,sessionMetrics(s)),`${m.share.filename}-${s.date}.png`);if(r==='heruntergeladen')toast('Bild gespeichert ✓')}
-  else if(a==='strength.new'){newStrength();nav('/module/strength/edit')}
+  else if(a==='strength.new'){newStrength(getState());nav('/module/strength/edit')}
   else if(a==='strength.planned.start'){startPlannedSession(getState(),el.dataset.id);nav('/module/strength/edit')}
   else if(a==='strength.skip'){await updateState(state=>skipCurrentUnit(state),{snapshot:true,reason:'before-cycle-skip'});toast('Einheit übersprungen ✓');render()}
   else if(a==='strength.open')nav(`/module/strength/detail/${el.dataset.id}`)
@@ -333,7 +333,14 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   else if(a==='plan.remove'){await updateState(state=>removeCycleItem(state,Number(el.dataset.index)),{snapshot:true,reason:'before-cycle-remove'});render()}
   else if(a==='plan.correct-today'){openCorrectTodayPicker();render()}
   else if(a==='plan.correct.close'){closeCorrectTodayPicker();render()}
-  else if(a==='plan.correct.select'){await updateState(state=>correctToday(state,Number(el.dataset.index)),{snapshot:true,reason:'before-correct-today'});toast('Heutige Zyklusposition korrigiert ✓');render()}
+  else if(a==='plan.correct.select'){
+    const hasToday=getState().sessions.some(session=>session.moduleId==='strength'&&session.date===todayIso());
+    const message=hasToday?'Die heutige Kraftsession wird verworfen und durch die ausgewählte Zyklusposition ersetzt. Fortfahren?':'Die ausgewählte Zyklusposition wird für heute gesetzt. Fortfahren?';
+    if(!confirm(message))return;
+    await updateState(state=>correctToday(state,Number(el.dataset.index)),{snapshot:true,reason:'before-correct-today'});
+    toast('Heutige Zyklusposition korrigiert ✓');
+    nav('/module/strength/today');
+  }
   else if(a==='plan.unit.rest'){await updateState(state=>toggleUnitRestDay(state,el.dataset.id));render()}
   else if(a==='strength.rest.complete'){await updateState(state=>completeRestDay(state,el.dataset.id));toast('Rest Day als erledigt markiert ✓');render()}
   else if(a==='plan.add-cycle'||a==='plan.unit.new'||a==='plan.unit.edit'||a==='plan.unit.delete'||a==='library.open'){toast('Editor folgt in der nächsten Plan-Etappe.')}

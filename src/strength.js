@@ -10,6 +10,48 @@ const expandedProgress=new Set();
 const clone=value=>structuredClone(value);
 export const currentStrengthEditor=()=>editor;
 
+function todayStrengthSession(state,date=todayIso()){
+  return state.sessions.find(session =>
+    session.moduleId==='strength' &&
+    session.date===date &&
+    session.status!=='archived'
+  )??null;
+}
+function removeTodayStrengthSessions(state,date=todayIso()){
+  state.sessions=state.sessions.filter(session =>
+    !(session.moduleId==='strength'&&session.date===date)
+  );
+}
+function formatCompactDuration(seconds){
+  if(!Number.isFinite(seconds)||seconds<=0)return null;
+  const minutes=Math.round(seconds/60);
+  if(minutes<60)return`${minutes} Min.`;
+  const hours=Math.floor(minutes/60),rest=minutes%60;
+  return rest?`${hours} Std. ${rest} Min.`:`${hours} Std.`;
+}
+function sessionSummary(state,session){
+  if(!session)return'Noch keine Werte';
+  let volume=0,duration=0,distance=0,hasStrength=false,hasCardio=false;
+  for(const segment of session.segments??[]){
+    const activity=activityFor(state,segment.activityId);
+    const cardio=activity?isCardioActivity(activity):false;
+    if(cardio){
+      hasCardio=true;
+      const metrics=segment.entries?.[0]?.metrics??{};
+      if(Number.isFinite(metrics.duration))duration+=metrics.duration;
+      if(Number.isFinite(metrics.distance))distance+=metrics.distance;
+    }else{
+      hasStrength=true;
+      for(const entry of segment.entries??[])volume+=setVolume(entry);
+    }
+  }
+  const parts=[];
+  if(hasStrength&&volume>0)parts.push(`${formatNumber(volume,0)} kg bewegt`);
+  if(hasCardio&&duration>0)parts.push(formatCompactDuration(duration));
+  if(hasCardio&&distance>0)parts.push(`${formatNumber(distance/1000,1)} km`);
+  return parts.length?parts.join(' · '):'Noch keine Werte';
+}
+
 const strengthPlan=state=>state.plans.find(plan=>plan.moduleId==='strength')??null;
 const strengthActivities=state=>state.activities.filter(activity=>activity.moduleId==='strength'&&!activity.archived);
 const activityFor=(state,id)=>state.activities.find(activity=>activity.id===id)??null;
@@ -112,6 +154,7 @@ function unitSegments(state,unit){
 }
 
 export function startPlannedSession(state,unitId){
+  if(todayStrengthSession(state))throw Error('Für heute existiert bereits eine Kraftsession. Nutze „Heute korrigieren“, um sie zu ersetzen.');
   const plan=normalizeLegacyPlan(strengthPlan(state));
   const unit=planUnitById(plan,unitId);
   if(!unit)throw Error('Einheit nicht gefunden.');
@@ -121,7 +164,8 @@ export function startPlannedSession(state,unitId){
   }};
 }
 
-export function newStrength(){
+export function newStrength(state=null){
+  if(state&&todayStrengthSession(state))throw Error('Für heute existiert bereits eine Kraftsession. Nutze „Heute korrigieren“, um sie zu ersetzen.');
   editor={mode:'create',plannedUnitId:null,draft:{
     id:id('session'),moduleId:'strength',date:todayIso(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
     status:'draft',title:'Freie Session',note:'',segments:[]
@@ -225,7 +269,7 @@ function metricInput(type,value,segmentId,entryId){
     const hours=Math.floor(value/3600),minutes=Math.round((value%3600)/60);
     shown=hours?`${hours}:${String(minutes).padStart(2,'0')}`:String(minutes);
   }
-  return`<label class="metric-field"><span>${esc(def.label)}${def.unit?' · '+esc(def.unit):''}</span>
+  return`<label class="compact-metric"><span>${esc(def.label)}${def.unit?' · '+esc(def.unit):''}</span>
     <input value="${esc(shown)}" inputmode="${type==='duration'?'text':'decimal'}" data-change="strength.metric" data-type="${type}" data-segment="${segmentId}" data-set="${entryId}"></label>`;
 }
 
@@ -235,7 +279,7 @@ function cardioSegmentHtml(activity,segment){
   return`<section class="strength-exercise cardio-exercise">
     <header><div><strong>${esc(activity.name)}</strong><small>Cardio / Messwerte</small></div>
     <button class="icon small" data-action="strength.exercise.remove" data-segment="${segment.id}">×</button></header>
-    <div class="cardio-grid">${metrics.map(type=>metricInput(type,entry.metrics?.[type],segment.id,entry.id)).join('')}</div>
+    <div class="compact-cardio-grid">${metrics.map(type=>metricInput(type,entry.metrics?.[type],segment.id,entry.id)).join('')}</div>
   </section>`;
 }
 
@@ -265,19 +309,39 @@ function strengthSegmentHtml(state,activity,segment){
 
 export function todayView(state){
   if(editor)return strengthEditorView(state);
+
+  const completed=todayStrengthSession(state);
+  if(completed){
+    return`<section class="today-hero completed">
+      <span class="eyebrow">✓ Heute abgeschlossen</span>
+      <h1>${esc(completed.title||'Krafttraining')}</h1>
+      <p>${esc(sessionSummary(state,completed))}</p>
+      <div class="today-actions">
+        <button class="button primary" data-action="strength.open" data-id="${completed.id}">Training ansehen</button>
+        <button class="button" data-action="plan.correct-today">Heute korrigieren</button>
+      </div>
+    </section>`;
+  }
+
   const current=nextTrainingUnit(state);
   if(!current){
     return`<section class="module-hero"><div class="module-hero__icon">🏋️</div><div><span class="eyebrow">Kraft</span><h1>Heute</h1><p>Noch kein aktiver Plan</p></div></section>
       <div class="card today-card"><h2>Noch kein Plan</h2><p class="muted">Lege im Plan-Tab deine Einheiten und den Zyklus an – oder starte spontan.</p>
       <button class="button primary top" data-action="strength.new">Freie Session starten</button></div>`;
   }
+
   const rest=isRestUnit(current.unit);
   const exerciseCount=(current.unit.segmente??current.unit.uebungen??[]).length;
   return`<section class="today-hero ${rest?'rest-day':''}">
     <span class="eyebrow">${rest?'☾ Rest Day':'● Nächste Einheit'}</span>
     <h1>${esc(current.unit.name)}</h1>
-    <p>${rest?(exerciseCount?`${exerciseCount} Aktivitäten im Plan · heute optional durchführen`:'Regenerationstag · morgen geht der Zyklus automatisch weiter'):`${exerciseCount} Übungen im Plan`}</p>
-    ${exerciseCount?`<div class="today-actions"><button class="button primary" data-action="strength.planned.start" data-id="${current.unit.id}">${rest?'Rest Day starten':'Jetzt starten'}</button><button class="button" data-action="strength.skip">Überspringen ›</button></div>`:`<div class="today-actions"><button class="button primary" data-action="strength.rest.complete" data-id="${current.unit.id}">Als erledigt markieren</button><button class="button" data-action="strength.skip">Überspringen ›</button></div>`}
+    <p>${rest
+      ?exerciseCount?`${exerciseCount} Aktivitäten im Plan · heute optional durchführen`:'Regenerationstag · morgen geht der Zyklus automatisch weiter'
+      :`${exerciseCount} Übungen im Plan`}</p>
+    ${exerciseCount?`<div class="today-actions"><button class="button primary" data-action="strength.planned.start" data-id="${current.unit.id}">${rest?'Rest Day starten':'Jetzt starten'}</button>
+    <button class="button" data-action="strength.skip">Überspringen ›</button></div>`
+    :`<div class="today-actions"><button class="button primary" data-action="strength.rest.complete" data-id="${current.unit.id}">Als erledigt markieren</button>
+    <button class="button" data-action="strength.skip">Überspringen ›</button></div>`}
     <button class="button subtle top" data-action="strength.new">Freie Session starten</button>
   </section>`;
 }
@@ -289,7 +353,7 @@ export function strengthEditorView(state){
     const activity=activityFor(state,segment.activityId);
     return activity?(isCardioActivity(activity)?cardioSegmentHtml(activity,segment):strengthSegmentHtml(state,activity,segment)):'';
   }).join('');
-  return`<section class="module-hero"><div class="module-hero__icon">🏋️</div><div><span class="eyebrow">Heute</span><h1>${esc(editor.draft.title)}</h1><p>${formatNumber(strengthVolume(editor.draft),0)} kg bewegt</p></div></section>
+  return`<section class="module-hero"><div class="module-hero__icon">🏋️</div><div><span class="eyebrow">Heute</span><h1>${esc(editor.draft.title)}</h1><p>${esc(sessionSummary(state,editor.draft))}</p></div></section>
     <div class="editor-card stack"><div class="exercise-picker"><select id="strengthExercise">${options||'<option value="">Keine Übungen vorhanden</option>'}</select>
     <button class="button" data-action="strength.exercise.add">Übung hinzufügen</button></div></div>
     <div class="stack top">${segments||'<div class="card empty">Füge deine erste Übung hinzu.</div>'}</div>
@@ -302,7 +366,7 @@ export function saveStrength(state){
   if(!editor.draft.segments.length)throw Error('Füge mindestens eine Übung hinzu.');
   const draft=clone(editor.draft);draft.status='completed';draft.updatedAt=new Date().toISOString();
   draft.legacy={...(draft.legacy??{}),planUnitId:editor.plannedUnitId};
-  if(editor.mode==='create')state.sessions.push(draft);else{
+  if(editor.mode==='create'){removeTodayStrengthSessions(state,draft.date);state.sessions.push(draft);}else{
     const index=state.sessions.findIndex(session=>session.id===draft.id);if(index<0)throw Error('Training nicht gefunden.');state.sessions[index]=draft;
   }
   editor=null;return draft;

@@ -101,3 +101,15 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - Einheiten können explizit als Rest Day markiert werden.
 - Heute korrigieren öffnet eine Auswahl aller Zykluspositionen.
 - Der Anker wird beim Abschluss nicht mehr doppelt weitergeschaltet.
+
+
+## Heute-Paritätsupdate v10
+
+- maximal eine Kraftsession pro Kalendertag
+- abgeschlossene Einheit bleibt bis zum Tageswechsel im Heute-Tab sichtbar
+- nächste Zykluseinheit erscheint erst am Folgetag
+- Heute korrigieren verwirft eine offene oder abgeschlossene heutige Kraftsession
+- Bestätigungsdialog vor dem Ersetzen
+- kompakte Cardiofelder mit bis zu drei Feldern pro Zeile
+- kompaktere Satzfelder
+- dynamische Kopfzusammenfassung für Kraft, Cardio und gemischte Einheiten
