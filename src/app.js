@@ -1,7 +1,7 @@
-import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';
+import{MODULES,getModule}from'./modules.js';import{todayIso,formatMetric,completedSessions,statistics,esc,shiftPeriod,emptyState,parseNumber,METRICS,weeklyOverview,weekStrip,monthGrid,sessionMetrics}from'./core.js';import{loadStore,getState,subscribe,updateState,replaceState}from'./store.js';import{overview,editorView,detail,newTour,editTour,cancelEdit,setTitle,setMetric,saveTour,deleteTour}from'./tours.js';import{view as challengeView,addChallenge,removeChallenge}from'./challenges.js';import{exportJson,importJson}from'./storage.js';
 
 const app=document.querySelector('#app'),file=document.querySelector('#importFile');
-let statType='month',statAnchor=todayIso();
+let statType='month',statAnchor=todayIso(),calendarAnchor=todayIso();
 
 const route=()=>{const p=(location.hash.slice(1)||'/dashboard').split('/').filter(Boolean);return{section:p[0]||'dashboard',moduleId:p[0]==='module'?p[1]:null,view:p[0]==='module'?(p[2]||'overview'):null,id:p[3]||null}};
 const nav=p=>location.hash=p.startsWith('/')?p:'/'+p;
@@ -23,41 +23,84 @@ function shell(title,content,{module=null,back=false,bottom='',dashboard=false}=
   </div>`
 }
 
+function moduleDot(moduleId){
+  const module=getModule(moduleId);
+  return module?`<span class="calendar-dot" style="--dot:${module.color}" title="${esc(module.label)}"></span>`:'';
+}
+
 function dashboard(){
+  const state=getState();
   const cards=MODULES.map(m=>{
-    const sessions=m.type==='tour'?completedSessions(getState(),m.id):[];
-    let value='',meta='';
+    const sessions=m.type==='tour'?completedSessions(state,m.id):[];
+    let meta='';
     if(m.type==='tour'){
-      const distance=sessions.reduce((sum,s)=>sum+(s.segments?.[0]?.entries?.[0]?.metrics?.distance||0),0);
-      value=sessions.length?`${sessions.length}`:'–';
-      meta=sessions.length?`${m.plural} · ${formatMetric('distance',distance)}`:`Noch keine ${m.plural}`;
+      const distance=sessions.reduce((sum,s)=>sum+(sessionMetrics(s).distance||0),0);
+      meta=sessions.length?`${sessions.length} ${m.plural} · ${formatMetric('distance',distance)}`:`Noch keine ${m.singular}`;
     }else if(m.type==='challenge'){
-      value=String(getState().challenges.length||'–');
-      meta=getState().challenges.length?'aktive Ziele':'Noch keine Ziele';
+      const open=state.challenges.length;
+      meta=open?`${open} ${open===1?'Ziel':'Ziele'} aktiv`:'Keine Ziele';
     }else{
-      value='•';
-      meta='Engine vorbereitet';
+      meta='Kraft-Engine vorbereitet';
     }
-    return`<button class="module-tile" style="--m:${m.color}" data-action="module" data-module="${m.id}">
-      <span class="module-tile__icon">${m.icon}</span>
-      <span class="module-tile__copy"><b>${esc(m.label)}</b><small>${esc(meta)}</small></span>
-      <span class="module-tile__value">${esc(value)}</span>
+    return`<button class="dashboard-module" style="--module:${m.color}" data-action="module" data-module="${m.id}">
+      <span class="dashboard-module__top"><span>${m.icon}</span><b>${esc(m.label)}</b></span>
+      <small>${esc(meta)}</small>
     </button>`
   }).join('');
-  const d=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});
-  const total=completedSessions(getState()).length;
-  return`<section class="dashboard-head">
-    <div>
-      <span class="eyebrow">All-in-One Next</span>
-      <h1>Deine Aktivitäten.</h1>
-      <p>${esc(d)}</p>
+
+  const week=weeklyOverview(state);
+  const weekRows=week.moduleRows.map(row=>{
+    const module=getModule(row.moduleId);
+    if(!module)return'';
+    let metric='';
+    if(row.moduleId==='cycling'||row.moduleId==='hiking')metric=formatMetric('distance',row.metrics.distance||0);
+    else metric=`${row.count} ${row.count===1?'Einheit':'Einheiten'}`;
+    return`<div class="week-module" style="--module:${module.color}">
+      <strong>${esc(module.label)}</strong>
+      <span><b>${row.count}</b> ${module.type==='tour'?(row.count===1?'Tour':'Touren'):'Aktivitäten'} · <b>${esc(metric)}</b></span>
+    </div>`
+  }).join('');
+
+  const days=weekStrip(state).map(day=>`<button class="week-day ${day.isToday?'today':''} ${day.isFuture?'future':''}" data-action="calendar.day" data-date="${day.iso}">
+    <span>${day.label}</span><b>${day.day}</b><i>${day.modules.map(moduleDot).join('')}</i>
+  </button>`).join('');
+
+  return`<section class="dashboard-title">
+    <div><span class="eyebrow"><span class="title-dot"></span>All-in-One</span><h1>Start</h1></div>
+  </section>
+  <section class="dashboard-modules">${cards}</section>
+  <p class="section-label">Diese Woche</p>
+  <section class="week-card">
+    <div class="week-head">
+      <div><b>${week.activities}</b><span>Aktivitäten</span></div>
+      <div><b>${week.activeDays}</b><span>aktive Tage</span></div>
     </div>
-    <div class="dashboard-orbit"><span>${total}</span><small>gesamt</small></div>
+    <div class="week-modules">${weekRows||'<p class="week-empty">Diese Woche noch nichts eingetragen.</p>'}</div>
   </section>
-  <section class="dashboard-summary">
-    <span>Heute</span><strong>Was möchtest du öffnen?</strong>
-  </section>
-  <div class="module-grid">${cards}</div>`
+  <p class="section-label">Kalender</p>
+  <section class="calendar-strip">
+    <div class="calendar-week">${days}</div>
+    <button class="calendar-open" data-action="calendar.open" aria-label="Monatskalender öffnen">›</button>
+  </section>`
+}
+
+function calendarView(){
+  const grid=monthGrid(getState(),calendarAnchor);
+  const cells=grid.cells.map(day=>`<button class="month-cell ${day.inMonth?'':'outside'} ${day.isToday?'today':''} ${day.isFuture?'future':''}" data-action="calendar.day" data-date="${day.iso}">
+    <b>${day.day}</b><i>${day.modules.map(moduleDot).join('')}</i>
+  </button>`).join('');
+  return`<section class="calendar-page">
+    <div class="calendar-nav">
+      <button class="icon" data-action="calendar.shift" data-step="-1">←</button>
+      <h2>${esc(grid.label)}</h2>
+      <button class="icon" data-action="calendar.shift" data-step="1">→</button>
+    </div>
+    <div class="month-weekdays">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(x=>`<span>${x}</span>`).join('')}</div>
+    <div class="month-grid">${cells}</div>
+    <div class="calendar-legend">
+      ${MODULES.filter(m=>m.type!=='challenge').map(m=>`<span>${moduleDot(m.id)}${esc(m.label)}</span>`).join('')}
+    </div>
+  </section>`
 }
 
 function statsView(m){
@@ -96,6 +139,7 @@ function render(){
   const r=route();
   if(r.section==='dashboard'){app.innerHTML=shell('All-in-One',dashboard(),{dashboard:true});return}
   if(r.section==='settings'){app.innerHTML=shell('Einstellungen',settings(),{back:true});return}
+  if(r.section==='calendar'){app.innerHTML=shell('Kalender',calendarView(),{back:true});return}
   const m=getModule(r.moduleId);if(!m){nav('/dashboard');return}
   let c='';
   if(m.type==='tour'){
@@ -113,6 +157,9 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]')
   if(a==='back')history.back();
   else if(a==='home')nav('/dashboard');
   else if(a==='settings')nav('/settings');
+  else if(a==='calendar.open'){calendarAnchor=todayIso();nav('/calendar')}
+  else if(a==='calendar.shift'){calendarAnchor=shiftPeriod('month',calendarAnchor,Number(el.dataset.step));render()}
+  else if(a==='calendar.day'){toast(new Date(el.dataset.date+'T00:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}))}
   else if(a==='module')nav(`/module/${el.dataset.module}/overview`);
   else if(a==='mview')nav(`/module/${r.moduleId}/${el.dataset.view}`);
   else if(a==='tour.new'){newTour(m);nav(`/module/${m.id}/edit`)}

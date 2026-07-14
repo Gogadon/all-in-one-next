@@ -16,3 +16,64 @@ export const sessionMetrics=s=>s.segments?.[0]?.entries?.[0]?.metrics??{};
 export const completedSessions=(state,moduleId)=>state.sessions.filter(s=>s.moduleId===moduleId&&s.status==='completed').toSorted((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
 export const aggregate=(type,values)=>{const nums=values.filter(Number.isFinite);if(!nums.length)return null;const a=METRICS[type]?.agg;if(a==='sum')return nums.reduce((x,y)=>x+y,0);if(a==='max')return Math.max(...nums);return nums.reduce((x,y)=>x+y,0)/nums.length};
 export const statistics=(state,moduleId,type,anchor)=>{const{from,to}=periodBounds(type,anchor),sessions=completedSessions(state,moduleId).filter(s=>s.date>=from&&s.date<to),types=new Set();sessions.forEach(s=>Object.keys(sessionMetrics(s)).forEach(t=>types.add(t)));const metrics={};types.forEach(t=>metrics[t]=aggregate(t,sessions.map(s=>sessionMetrics(s)[t])));return{sessions,metrics,count:sessions.length,from,to}};
+
+export const allCompletedSessions=state=>state.sessions
+  .filter(s=>s.status==='completed')
+  .toSorted((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
+
+export function weeklyOverview(state,anchor=todayIso()){
+  const{from,to}=periodBounds('week',anchor);
+  const sessions=allCompletedSessions(state).filter(s=>s.date>=from&&s.date<to);
+  const activeDays=new Set(sessions.map(s=>s.date)).size;
+  const modules={};
+  for(const s of sessions){
+    const key=s.moduleId;
+    const entry=modules[key]??={moduleId:key,count:0,metrics:{}};
+    entry.count++;
+    const metrics=sessionMetrics(s);
+    for(const[type,value]of Object.entries(metrics)){
+      if(!Number.isFinite(value))continue;
+      (entry.metrics[type]??=[]).push(value);
+    }
+  }
+  const moduleRows=Object.values(modules).map(row=>{
+    const metrics={};
+    for(const[type,values]of Object.entries(row.metrics))metrics[type]=aggregate(type,values);
+    return{moduleId:row.moduleId,count:row.count,metrics};
+  });
+  return{activities:sessions.length,activeDays,moduleRows};
+}
+
+export function weekStrip(state,anchor=todayIso()){
+  const{from}=periodBounds('week',anchor);
+  const weekdays=['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const today=todayIso();
+  const days=[];
+  for(let i=0;i<7;i++){
+    const date=isoDate(from);date.setUTCDate(date.getUTCDate()+i);
+    const iso=date.toISOString().slice(0,10);
+    const modules=[...new Set(allCompletedSessions(state).filter(s=>s.date===iso).map(s=>s.moduleId))];
+    days.push({iso,label:weekdays[i],day:date.getUTCDate(),modules,isToday:iso===today,isFuture:iso>today});
+  }
+  return days;
+}
+
+export function monthGrid(state,anchor=todayIso()){
+  const base=isoDate(anchor);
+  const year=base.getUTCFullYear(),month=base.getUTCMonth();
+  const first=new Date(Date.UTC(year,month,1));
+  const offset=(first.getUTCDay()+6)%7;
+  const start=new Date(Date.UTC(year,month,1-offset));
+  const today=todayIso();
+  const cells=[];
+  for(let i=0;i<42;i++){
+    const d=new Date(start);d.setUTCDate(start.getUTCDate()+i);
+    const iso=d.toISOString().slice(0,10);
+    const modules=[...new Set(allCompletedSessions(state).filter(s=>s.date===iso).map(s=>s.moduleId))];
+    cells.push({iso,day:d.getUTCDate(),inMonth:d.getUTCMonth()===month,modules,isToday:iso===today,isFuture:iso>today});
+  }
+  return{
+    label:new Date(Date.UTC(year,month,1)).toLocaleDateString('de-DE',{month:'long',year:'numeric',timeZone:'UTC'}),
+    cells
+  };
+}

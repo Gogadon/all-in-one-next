@@ -30,3 +30,12 @@ Die Kraft-/Plan-/Zykluslogik ist bewusst noch nicht vollständig implementiert. 
 - dauerhafter Start-Button in allen Modulen
 - Start-Tab in der unteren Modulnavigation
 - hochwertigere Modulheader, Listen, Formulare und Statistik-Karten
+
+
+## Dashboard-Update v3
+
+- kompakte 2×2-Modulkacheln nach dem aktuellen Dashboard der ersten App
+- zweistufige Wochenübersicht mit Aktivitäten und aktiven Tagen
+- modulspezifische Wochenzeilen
+- Wochenkalender mit Farbpunkten
+- Monatskalender mit Navigation und Legende
