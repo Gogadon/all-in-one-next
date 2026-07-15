@@ -1,6 +1,6 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.1.1** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.1.2** enthält bewusst nur das Dashboard-Fundament.
 
 ## Aktueller Umfang
 
@@ -88,3 +88,14 @@ npm test
 - erfolgreiche Importe werden mit einem kleinen Toast bestätigt
 - Importfehler werden in einem App-Dialog statt per Browser-`alert()` angezeigt
 - auch das Zurücksetzen nutzt jetzt den einheitlichen App-Dialog
+
+
+## Änderungen in 0.1.2
+
+- fehlerhafte 0.1.1-Dialogumstellung tatsächlich korrigiert
+- `alert()` und `confirm()` vollständig aus `src/app.js` entfernt
+- eigener Warn- und Bestätigungsdialog für Import und Datenlöschung
+- Toast nach erfolgreichem Import
+- eigener Pull-to-Reload für Browser und installierte PWA
+- Pull-to-Reload funktioniert am oberen Rand jeder normalen App-Seite
+- Tages-Sheet und geöffnete Dialoge blockieren Pull-to-Reload bewusst
