@@ -1,16 +1,14 @@
 {
-  "name": "All-in-One Next",
+  "name": "All-in-One",
   "short_name": "All-in-One",
-  "start_url": "./#/dashboard",
+  "description": "Modulares Fitness- und Aktivitätsdashboard",
+  "start_url": "./#/",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#090B0E",
-  "theme_color": "#090B0E",
+  "background_color": "#0C0D0E",
+  "theme_color": "#0C0D0E",
   "icons": [
-    {
-      "src": "./assets/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    }
+    {"src":"assets/icons/icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"assets/icons/icon-512.png","sizes":"512x512","type":"image/png"}
   ]
 }
