@@ -1,6 +1,6 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.1.2** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.1.3** enthält bewusst nur das Dashboard-Fundament.
 
 ## Aktueller Umfang
 
@@ -99,3 +99,13 @@ npm test
 - eigener Pull-to-Reload für Browser und installierte PWA
 - Pull-to-Reload funktioniert am oberen Rand jeder normalen App-Seite
 - Tages-Sheet und geöffnete Dialoge blockieren Pull-to-Reload bewusst
+
+
+## Änderungen in 0.1.3
+
+- eigener Bestätigungsdialog vor dem Backup-Export
+- Export verändert oder löscht keine lokalen Daten
+- eindeutige Export-Dateinamen mit Datum, Uhrzeit und Sekunden
+- Beispiel: `all-in-one-backup-2026-07-15-231845.json`
+- dadurch erscheint die systemseitige Nachfrage „Datei noch einmal herunterladen?“ normalerweise nicht mehr
+- kleiner Toast nach dem Start des Downloads

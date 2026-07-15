@@ -223,16 +223,33 @@ function render(){
     +dialogView();
 }
 
+function backupFilename(now=new Date()){
+  const date=[
+    now.getFullYear(),
+    String(now.getMonth()+1).padStart(2,'0'),
+    String(now.getDate()).padStart(2,'0')
+  ].join('-');
+
+  const time=[
+    String(now.getHours()).padStart(2,'0'),
+    String(now.getMinutes()).padStart(2,'0'),
+    String(now.getSeconds()).padStart(2,'0')
+  ].join('');
+
+  return`all-in-one-backup-${date}-${time}.json`;
+}
+
 function downloadBackup(){
   const blob=new Blob([exportBackup(state)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const anchor=document.createElement('a');
 
   anchor.href=url;
-  anchor.download=`all-in-one-backup-${todayIso()}.json`;
+  anchor.download=backupFilename();
   anchor.click();
 
-  URL.revokeObjectURL(url);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast('Backup-Download gestartet ✓');
 }
 
 document.addEventListener('click',event=>{
@@ -284,7 +301,15 @@ document.addEventListener('click',event=>{
     save(state);
     render();
   }
-  else if(action==='backup.export')downloadBackup();
+  else if(action==='backup.export'){
+    showDialog({
+      eyebrow:'Backup & Daten',
+      title:'Backup exportieren?',
+      text:'Der aktuelle lokale Stand wird als neue JSON-Datei gespeichert. Vorhandene Daten in der App bleiben unverändert.',
+      confirmText:'Backup herunterladen',
+      onConfirm:downloadBackup
+    });
+  }
   else if(action==='backup.import'){
     showDialog({
       eyebrow:'Backup & Daten',
