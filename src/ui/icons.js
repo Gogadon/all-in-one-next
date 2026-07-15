@@ -2,6 +2,13 @@ const svg=(body,viewBox='0 0 24 24')=>`<svg aria-hidden="true" viewBox="${viewBo
 export const icons={
   app:svg('<path d="M12 2.6 20 7v10l-8 4.4L4 17V7z"/><circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none"/>'),
   strength:svg('<path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/>'),
+  home:svg('<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/>'),
+  today:svg('<path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/>'),
+  plan:svg('<path d="M7 5h14M7 12h14M7 19h14"/><circle cx="3" cy="5" r=".8" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3" cy="19" r=".8" fill="currentColor" stroke="none"/>'),
+  history:svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>'),
+  cardio:svg('<path d="M4 15c2-5 4-5 6 0s4 5 6 0 3-4 4-2"/><path d="M3 19h18"/>'),
+  info:svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.5" r=".7" fill="currentColor" stroke="none"/>'),
+  swap:svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   cycling:svg('<circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5l5-8 7 8M11 8.5h5"/>'),
   hiking:svg('<path d="M7 4v8.4c0 1.5-.7 2.8-2 3.7L3.5 17a2.5 2.5 0 0 0 1.3 4.7h11.8a3.4 3.4 0 0 0 3.4-3.4v-1.1c0-1.3-.7-2.5-1.9-3.1l-5.6-2.8V7.6"/><path d="M7 8h5.5M7 11h5.5M6.2 17h13.3"/>'),
   challenge:svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>'),

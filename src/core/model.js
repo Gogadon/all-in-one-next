@@ -12,7 +12,16 @@ const planFor=(state,module='kraft')=>state.plaene?.[module]??null;
 const planUnit=(plan,id)=>plan?.einheiten?.find(unit=>unit.id===id)??null;
 export function dayStatus(state,module,iso){const sessions=(state.sessions??[]).filter(session=>session.datum===iso&&sessionModule(session)===module);if(sessions.some(session=>session.abgeschlossen&&!session.uebersprungen))return'erledigt';if(sessions.some(session=>session.uebersprungen))return'uebersprungen';return'offen'}
 export const skipsOnDay=(state,module,iso)=>(state.sessions??[]).filter(session=>session.datum===iso&&sessionModule(session)===module&&session.uebersprungen).length;
-export function isRestUnit(state,unit){if(!unit)return false;if(unit.typ==='rest'||unit.restDay===true)return true;const segments=unit.segmente??[];if(!segments.length)return false;const activities=segments.map(segment=>activityById(state,segment.aktivitaetId)).filter(Boolean);return activities.length>0&&activities.every(activity=>activity.cardio===true)}
+export function isRestUnit(state,unit){
+  if(!unit)return false;
+  if(unit.typ==='rest'||unit.restDay===true)return true;
+  const segments=unit.segmente??[];
+  if(!segments.length)return false;
+  const activities=segments.map(segment=>activityById(state,segment.aktivitaetId)).filter(Boolean);
+  return activities.length===segments.length
+    &&activities.length>0
+    &&activities.every(activity=>activity.cardio===true||activity.kategorie!=='kraft');
+}
 export function cyclePositionToday(state,module='kraft',today=todayIso()){
   const plan=planFor(state,module);if(!plan?.zyklus?.length)return 0;const length=plan.zyklus.length;
   const anchor=plan.anker?.iso&&Number.isInteger(plan.anker.index)?plan.anker:{iso:today,index:(plan.position??0)%length};

@@ -3,6 +3,13 @@ import{route,go,subscribe}from'./core/router.js';
 import{todayIso,shiftMonth}from'./core/date.js';
 import{dashboardView}from'./features/dashboard/dashboard.js';
 import{calendarView,daySheetView}from'./features/calendar/calendar.js';
+import{
+  setStrengthLibraryFilter,
+  strengthView,
+  toggleStrengthExercise,
+  toggleStrengthHistory,
+  toggleStrengthUnit
+}from'./features/strength/strength.js';
 import{icons}from'./ui/icons.js';
 import{escapeHtml,moduleName}from'./ui/format.js';
 
@@ -211,10 +218,12 @@ function render(){
 
   topbar.innerHTML=topbarView(current);
   document.body.classList.toggle('dashboard-route',current.name==='dashboard');
+  document.body.classList.toggle('strength-route',current.name==='module'&&current.module==='kraft');
 
   if(current.name==='dashboard')main.innerHTML=dashboardView(state);
   else if(current.name==='calendar')main.innerHTML=calendarView(state,calendarAnchor);
   else if(current.name==='settings')main.innerHTML=settingsView();
+  else if(current.name==='module'&&current.module==='kraft')main.innerHTML=strengthView(state,current.view);
   else if(current.name==='module')main.innerHTML=modulePreview(current.module);
   else main.innerHTML=dashboardView(state);
 
@@ -267,7 +276,14 @@ document.addEventListener('click',event=>{
     calendarAnchor=shiftMonth(calendarAnchor,Number(element.dataset.step));
     render();
   }
-  else if(action==='module.open')go(`/module/${element.dataset.module}`);
+  else if(action==='module.open'){
+    go(element.dataset.module==='kraft'?'/module/kraft/today':`/module/${element.dataset.module}`);
+  }
+  else if(action==='strength.nav')go(element.dataset.path);
+  else if(action==='strength.unit.toggle'){toggleStrengthUnit(element.dataset.id);render()}
+  else if(action==='strength.exercise.toggle'){toggleStrengthExercise(element.dataset.id);render()}
+  else if(action==='strength.history.toggle'){toggleStrengthHistory(element.dataset.id);render()}
+  else if(action==='strength.library.filter'){setStrengthLibraryFilter(element.dataset.filter);render()}
   else if(action==='nav.back')history.back();
   else if(action==='day.open'){
     selectedDay=element.dataset.date;

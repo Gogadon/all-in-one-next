@@ -1,6 +1,6 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.1.3** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.2.0** enthält bewusst nur das Dashboard-Fundament.
 
 ## Aktueller Umfang
 
@@ -109,3 +109,46 @@ npm test
 - Beispiel: `all-in-one-backup-2026-07-15-231845.json`
 - dadurch erscheint die systemseitige Nachfrage „Datei noch einmal herunterladen?“ normalerweise nicht mehr
 - kleiner Toast nach dem Start des Downloads
+
+
+## Kraft-Grundstruktur 0.2.0
+
+Diese Etappe ist absichtlich **nur lesend**. Das Kraftmodul übernimmt Datenstruktur und Navigation der alten App, verändert aber noch keine Trainingsdaten.
+
+### Enthalten
+
+- Kraftnavigation: Start, Heute, Plan und Verlauf
+- eigene URL-Pfade für sämtliche Kraftbereiche
+- Android-Zurück-Navigation und Reload bleiben erhalten
+- Tagesansicht mit:
+  - aktueller Zyklusposition
+  - nächster Einheit
+  - erkanntem Rest Day
+  - abgeschlossener oder offener heutiger Session
+  - vollständiger Aktivitätenliste der Einheit
+- Planansicht mit:
+  - vollständigem Zyklus
+  - Markierung der heutigen Position
+  - Einheitenbibliothek
+  - Nutzungshäufigkeit jeder Einheit im Zyklus
+  - aufklappbaren Einheiten und geordneter Übungsliste
+- separate Übungsbibliothek:
+  - Kraft- und Cardioaktivitäten
+  - Messwerte
+  - Einarmig- und Assistiert-Merkmale
+  - Progressionseinstellungen
+  - Notizen
+  - Alternativen als Referenzen auf andere Bibliotheksübungen
+- lesbarer Trainingsverlauf mit aufklappbaren Sessions
+- Datenprüfung auf fehlende Einheiten- und Aktivitätsreferenzen
+
+### Noch nicht enthalten
+
+- Training starten oder fortsetzen
+- Überspringen
+- Heute korrigieren
+- Plan und Bibliotheken bearbeiten
+- Verlauf teilen
+- Fortschrittscharts
+
+Diese Schreib- und Trainingsabläufe folgen in Version 0.2.1 und späteren Kraft-Etappen.
