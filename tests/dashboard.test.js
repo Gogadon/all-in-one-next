@@ -1,0 +1,8 @@
+import test from'node:test';
+import assert from'node:assert/strict';
+import{weekOverview,weekStrip,currentUnit,sessionVolume}from'../src/core/model.js';
+const base=()=>({schema:2,bibliothek:[],sessions:[],plaene:{},challenges:[],termine:[],einstellungen:{}});
+test('Wochenübersicht zählt Aktivitäten und aktive Tage',()=>{const state=base();state.sessions=[{id:'1',datum:'2026-07-13',modul:'rad',abgeschlossen:true,segmente:[{eintraege:[{messwerte:{distanz:10000}}]}]},{id:'2',datum:'2026-07-13',modul:'wandern',abgeschlossen:true,segmente:[{eintraege:[{messwerte:{distanz:5000}}]}]},{id:'3',datum:'2026-07-14',modul:'rad',abgeschlossen:true,segmente:[{eintraege:[{messwerte:{distanz:20000}}]}]}];const overview=weekOverview(state,'2026-07-14');assert.equal(overview.activities,3);assert.equal(overview.activeDays,2);assert.equal(overview.rows.find(row=>row.module==='rad').distance,30000)});
+test('Kraftvolumen ignoriert Aufwärmsätze und Assistenz',()=>{const session={segmente:[{erledigt:true,eintraege:[{messwerte:{gewicht:50,wdh:10},flags:[]},{messwerte:{gewicht:30,wdh:10},flags:['aufwaermsatz']},{messwerte:{gewicht:-15,wdh:12},flags:[]}]}]};assert.equal(sessionVolume(session),500)});
+test('Wochenstreifen enthält sieben Tage',()=>{const days=weekStrip(base(),'2026-07-15','2026-07-15');assert.equal(days.length,7);assert.equal(days[0].label,'Mo');assert.equal(days[2].isToday,true)});
+test('Dashboardstatus nutzt die verankerte Kraft-Zyklusposition',()=>{const state=base();state.plaene.kraft={anker:{iso:'2026-07-15',index:1},position:0,zyklus:['a','b'],einheiten:[{id:'a',name:'A',segmente:[]},{id:'b',name:'B',segmente:[]}]};assert.equal(currentUnit(state,'kraft','2026-07-15').name,'B')});
