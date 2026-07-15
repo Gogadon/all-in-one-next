@@ -1,6 +1,6 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.1.0** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.1.1** enthält bewusst nur das Dashboard-Fundament.
 
 ## Aktueller Umfang
 
@@ -77,3 +77,14 @@ npm test
 - `0.4.x`: Wandern
 - `0.5.x`: Challenge
 - `1.0.0`: vollständige, abgenommene App
+
+
+## Änderungen in 0.1.1
+
+- Textauswahl und Android-Kontextmenü außerhalb echter Eingabefelder deaktiviert
+- Eingabefelder, Textbereiche und `contenteditable` bleiben normal auswählbar
+- eigener Import-Warndialog im App-Design
+- Warnung erscheint vor dem Öffnen der Dateiauswahl
+- erfolgreiche Importe werden mit einem kleinen Toast bestätigt
+- Importfehler werden in einem App-Dialog statt per Browser-`alert()` angezeigt
+- auch das Zurücksetzen nutzt jetzt den einheitlichen App-Dialog
