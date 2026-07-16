@@ -1,6 +1,6 @@
 import{formatDate}from'../../core/date.js';
 import{activityById}from'../../core/model.js';
-import{escapeHtml,formatDistance,formatDuration,formatMetric,formatNumber}from'../../ui/format.js';
+import{escapeHtml,formatDuration,formatMetric,formatNumber}from'../../ui/format.js';
 import{icons}from'../../ui/icons.js';
 import{
   activityUsage,
@@ -10,7 +10,6 @@ import{
   restDayInfo,
   sessionTitle,
   strengthActivities,
-  strengthDataAudit,
   strengthPlan,
   strengthSessionSummary,
   strengthUnits,
@@ -18,11 +17,24 @@ import{
   unitActivities,
   unitUsage
 }from'./strength-model.js';
+import{
+  baseStrengthActivity,
+  isAssistActivity,
+  isStrengthActivity,
+  isUnilateralActivity,
+  metricInputValue,
+  resolvedStrengthActivity,
+  strengthSessionSummaryText
+}from'./strength-session.js';
 
 const expandedUnits=new Set();
 const expandedExercises=new Set();
 const expandedHistory=new Set();
+const collapsedSegments=new Set();
+const openedCompletedSegments=new Set();
+
 let libraryFilter='all';
+let exercisePicker=null;
 
 const metricLabels={
   gewicht:'Gewicht',
@@ -46,6 +58,7 @@ const progressionLabel=progression=>{
 
 function strengthBottomNav(view){
   const planActive=view==='plan'||view==='library';
+
   return`<nav class="strength-bottom" aria-label="Kraft-Navigation">
     <button data-action="strength.nav" data-path="/" aria-label="Start">${icons.home}<span>Start</span></button>
     <button class="${view==='today'?'active':''}" data-action="strength.nav" data-path="/module/kraft/today">${icons.today}<span>Heute</span></button>
@@ -55,11 +68,11 @@ function strengthBottomNav(view){
 }
 
 function pageShell(view,content){
-  return`<section class="strength-page">${content}</section>${strengthBottomNav(view)}`;
+  return`<section class="strength-page">${content}</section>${strengthBottomNav(view)}${exercisePickerView()}`;
 }
 
-function readOnlyBanner(){
-  return`<div class="strength-readonly">${icons.info}<span><strong>Prüfstand 0.2.0</strong> Daten und Zyklus sind lesbar. Starten, Ändern und Speichern folgen in 0.2.1.</span></div>`;
+function readOnlyBanner(text='Bearbeiten von Plan und Bibliotheken folgt in 0.2.2.'){
+  return`<div class="strength-readonly">${icons.info}<span><strong>Ausbaustufe 0.2.1</strong>${escapeHtml(text)}</span></div>`;
 }
 
 function activityType(activity){
@@ -68,6 +81,7 @@ function activityType(activity){
 
 function activityFlags(activity){
   const settings=activity?.einstellungen??{};
+
   return[
     settings.einarmig?'Einarmig':null,
     settings.assist?'Assistiert':null,
@@ -77,6 +91,7 @@ function activityFlags(activity){
 
 function compactActivityRow(state,row){
   const activity=row.activity;
+
   if(!activity){
     return`<div class="unit-activity missing"><span>${row.index+1}</span><div><strong>Aktivität fehlt</strong><small>${escapeHtml(row.segment.aktivitaetId)}</small></div></div>`;
   }
@@ -87,64 +102,307 @@ function compactActivityRow(state,row){
   </div>`;
 }
 
-function todayView(state){
-  const model=todayStrengthModel(state);
-  const audit=strengthDataAudit(state);
+function strengthSetSummary(segment){
+  const entries=segment.eintraege??[];
+  if(!entries.length)return'noch keine Sätze';
 
-  if(!model.plan){
-    return pageShell('today',`
-      <div class="strength-title"><span class="eyebrow"><i></i>Kraft</span><h1>Heute</h1></div>
-      ${readOnlyBanner()}
-      <section class="panel strength-empty"><h2>Kein Kraftplan importiert</h2><p>Importiere dein Backup der alten App. Danach werden Zyklus, Einheiten und Bibliothek hier angezeigt.</p></section>
-    `);
+  const warmups=entries.filter(entry=>entry.flags?.includes('aufwaermsatz')).length;
+  const weights=entries
+    .filter(entry=>!entry.flags?.includes('aufwaermsatz'))
+    .map(entry=>entry.messwerte?.gewicht)
+    .filter(Number.isFinite);
+
+  const parts=[`${entries.length} ${entries.length===1?'Satz':'Sätze'}`];
+  if(warmups)parts.push(`${warmups} Aufw.`);
+
+  if(weights.length){
+    const min=Math.min(...weights);
+    const max=Math.max(...weights);
+    parts.push(min===max
+      ?`${formatNumber(min,Number.isInteger(min)?0:2)} kg`
+      :`${formatNumber(min,Number.isInteger(min)?0:2)}–${formatNumber(max,Number.isInteger(max)?0:2)} kg`);
   }
 
-  const unit=model.unit;
-  const rest=model.restDay.isRestDay;
-  const count=model.unitActivities.length;
-  const summary=model.completed?strengthSessionSummary(state,model.completed):null;
-
-  let hero;
-
-  if(model.status==='completed'){
-    hero=`<section class="strength-today-card completed">
-      <span class="strength-kicker">✓ Heute abgeschlossen</span>
-      <h1>${escapeHtml(summary.title)}</h1>
-      <p>${summary.volume>0?`${formatNumber(summary.volume,0)} kg bewegt`:summary.duration>0?formatDuration(summary.duration):'Einheit gespeichert'}${summary.distance>0?` · ${formatDistance(summary.distance)}`:''}</p>
-      <div class="strength-status-line"><span>${summary.segmentCount} Aktivitäten</span><span>Zyklustag ${model.position+1} von ${model.cycle.length}</span></div>
-    </section>`;
-  }else if(model.status==='open'){
-    hero=`<section class="strength-today-card open-session">
-      <span class="strength-kicker">● Offene Session gefunden</span>
-      <h1>${escapeHtml(sessionTitle(state,model.open))}</h1>
-      <p>Die bestehende Session wurde aus dem alten Datenstand erkannt.</p>
-      <div class="strength-status-line"><span>${model.open.segmente?.length??0} Segmente</span><span>Zyklustag ${model.position+1} von ${model.cycle.length}</span></div>
-    </section>`;
-  }else{
-    hero=`<section class="strength-today-card ${rest?'rest':''}">
-      <span class="strength-kicker">${rest?'☾ Rest Day':'● Nächste Einheit'}</span>
-      <h1>${escapeHtml(unit?.name??'Unbekannte Einheit')}</h1>
-      <p>${count} ${count===1?'Aktivität':'Aktivitäten'} im Plan</p>
-      <div class="strength-status-line"><span>Zyklustag ${model.position+1} von ${model.cycle.length}</span>${rest?`<span>${model.restDay.source==='explicit'?'explizit markiert':'aus Cardio-Inhalt erkannt'}</span>`:''}</div>
-    </section>`;
-  }
-
-  const activityList=unit?`<section class="panel today-unit-preview">
-    <div class="strength-section-head"><div><span class="section-label inline">Einheit</span><h2>${escapeHtml(unit.name)}</h2></div><span>${count}</span></div>
-    <div class="unit-activities">${model.unitActivities.map(row=>compactActivityRow(state,row)).join('')}</div>
-  </section>`:'';
-
-  return pageShell('today',`
-    <div class="strength-title"><span class="eyebrow"><i></i>Kraft</span><h1>Heute</h1></div>
-    ${readOnlyBanner()}
-    ${hero}
-    ${activityList}
-    <section class="strength-audit">
-      <span>${audit.units} Einheiten</span><span>${audit.activities} Übungen</span><span>${audit.sessions} Trainings</span>
-    </section>
-  `);
+  return parts.join(' · ');
 }
 
+function cardioSegmentSummary(activity,segment){
+  const entry=segment.eintraege?.[0];
+  if(!entry)return'noch keine Werte';
+
+  const values=(activity.messwerte??[])
+    .filter(type=>entry.messwerte?.[type]!=null)
+    .map(type=>{
+      const formatted=formatMetric(type,entry.messwerte[type]);
+      return type==='puls_avg'?`Ø ${formatted}`:type==='puls_max'?`max ${formatted}`:formatted;
+    });
+
+  return values.length?values.join(' · '):'noch keine Werte';
+}
+
+function segmentSummary(state,segment){
+  const activity=resolvedStrengthActivity(state,segment);
+  return isStrengthActivity(activity)
+    ?strengthSetSummary(segment)
+    :cardioSegmentSummary(activity,segment);
+}
+
+function segmentOpen(segment,readonly){
+  if(readonly)return openedCompletedSegments.has(segment.id);
+  if(segment.erledigt===true)return openedCompletedSegments.has(segment.id);
+  return!collapsedSegments.has(segment.id);
+}
+
+function assistButton(entry,activity,sessionId,segmentId){
+  if(!isAssistActivity(activity))return'';
+
+  const help=entry.messwerte?.gewicht!=null
+    ?entry.messwerte.gewicht<0
+    :entry._plus!==true;
+
+  return`<button class="assist-sign ${help?'help':'load'}" data-action="strength.assist.toggle"
+    data-session="${sessionId}" data-segment="${segmentId}" data-entry="${entry.id}"
+    aria-label="${help?'Hilfegewicht':'Zusatzgewicht'}">${help?'−':'+'}</button>`;
+}
+
+function strengthSetRow(activity,session,segment,entry,index){
+  const unilateral=isUnilateralActivity(activity);
+  const assist=isAssistActivity(activity);
+  const weight=entry.messwerte?.gewicht;
+  const shownWeight=weight==null?'':formatNumber(assist?Math.abs(weight):weight,Number.isInteger(weight)?0:2);
+  const warmup=entry.flags?.includes('aufwaermsatz');
+
+  return`<div class="training-set ${warmup?'warmup':''} ${unilateral?'unilateral':''}">
+    <button class="training-set-number ${warmup?'warmup':''}" data-action="strength.warmup.toggle"
+      data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}"
+      aria-label="Aufwärmsatz umschalten">${warmup?'A':index+1}</button>
+    ${assistButton(entry,activity,session.id,segment.id)}
+    <label class="training-field weight">
+      <input type="text" inputmode="decimal" value="${escapeHtml(shownWeight)}" placeholder="kg"
+        data-strength-metric data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}" data-type="gewicht">
+      <span>kg</span>
+    </label>
+    <span class="training-times">×</span>
+    ${unilateral?`
+      <label class="training-field narrow">
+        <input type="text" inputmode="numeric" value="${entry.messwerte?.wdh_l??''}" placeholder="L"
+          data-strength-metric data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}" data-type="wdh_l">
+        <span>L</span>
+      </label>
+      <span class="training-times">/</span>
+      <label class="training-field narrow">
+        <input type="text" inputmode="numeric" value="${entry.messwerte?.wdh_r??''}" placeholder="R"
+          data-strength-metric data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}" data-type="wdh_r">
+        <span>R</span>
+      </label>`
+      :`<label class="training-field reps">
+        <input type="text" inputmode="numeric" value="${entry.messwerte?.wdh??''}" placeholder="Wdh"
+          data-strength-metric data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}" data-type="wdh">
+        <span>Wdh</span>
+      </label>`}
+    <button class="training-set-remove" data-action="strength.set.remove"
+      data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}" aria-label="Satz entfernen">×</button>
+  </div>`;
+}
+
+const metricUnit=(type,activity)=>{
+  if(type==='dauer')return'min';
+  if(type==='distanz')return activity?.kategorie==='schwimmen'?'m':'km';
+  return{
+    puls_avg:'bpm',puls_max:'bpm',kalorien:'kcal',hoehenmeter:'hm',
+    schritte:'Schritte',tempo_avg:'km/h',tempo_max:'km/h',
+    watt_avg:'W',trittfrequenz:'rpm'
+  }[type]??metricLabels[type]??type;
+};
+
+function cardioFields(activity,session,segment,entry){
+  return`<div class="training-cardio-grid">${(activity.messwerte??[]).map(type=>`
+    <label class="training-cardio-field">
+      <span>${escapeHtml(metricLabels[type]??type)}</span>
+      <div><input type="text" inputmode="${type==='dauer'?'text':'decimal'}"
+        value="${escapeHtml(metricInputValue(type,entry.messwerte?.[type],activity))}"
+        placeholder="${type==='dauer'?'45 oder 1:15':escapeHtml(metricUnit(type,activity))}"
+        data-strength-metric data-session="${session.id}" data-segment="${segment.id}" data-entry="${entry.id}" data-type="${type}">
+        <small>${escapeHtml(metricUnit(type,activity))}</small></div>
+    </label>`).join('')}</div>`;
+}
+
+function alternativePicker(state,session,segment){
+  const base=baseStrengthActivity(state,segment);
+  const alternatives=(base?.alternativen??[]).map(id=>activityById(state,id)).filter(Boolean);
+
+  if(!alternatives.length)return'';
+
+  return`<label class="training-alternative">
+    <span>Übung für heute</span>
+    <select data-strength-alternative data-session="${session.id}" data-segment="${segment.id}">
+      <option value="">${escapeHtml(base.name)}</option>
+      ${alternatives.map(activity=>`<option value="${activity.id}" ${segment.altOf===activity.id?'selected':''}>${escapeHtml(activity.name)}</option>`).join('')}
+    </select>
+  </label>`;
+}
+
+function trainingSegmentCard(state,session,segment,readonly=false){
+  const activity=resolvedStrengthActivity(state,segment);
+  if(!activity)return'';
+
+  const open=segmentOpen(segment,readonly);
+  const checked=segment.erledigt===true;
+  const summary=segmentSummary(state,segment);
+  const deviceNote=(activity.notiz??'').trim();
+  const entry=segment.eintraege?.[0];
+
+  return`<section class="training-segment ${checked?'done':''} ${readonly?'readonly':''}">
+    <div class="training-segment-head">
+      ${readonly
+        ?`<span class="training-check ${checked?'checked':''}">${checked?'✓':'·'}</span>`
+        :`<button class="training-check ${checked?'checked':''}" data-action="strength.segment.done"
+          data-session="${session.id}" data-segment="${segment.id}" aria-label="Übung abschließen">${checked?'✓':''}</button>`}
+      <button class="training-segment-title" data-action="strength.segment.toggle" data-segment="${segment.id}">
+        <strong><i class="activity-dot ${isStrengthActivity(activity)?'kraft':'rad'}"></i>${escapeHtml(activity.name)}</strong>
+        <small>${escapeHtml(summary)}</small>
+      </button>
+      <button class="training-fold ${open?'open':''}" data-action="strength.segment.toggle" data-segment="${segment.id}" aria-label="Aufklappen">${icons.chevron}</button>
+    </div>
+    ${deviceNote?`<div class="training-device-note">${icons.info}<span>${escapeHtml(deviceNote)}</span></div>`:''}
+    ${open?`<div class="training-segment-body">
+      ${readonly?'':alternativePicker(state,session,segment)}
+      ${isStrengthActivity(activity)
+        ?`<div class="training-sets">${(segment.eintraege??[]).map((item,index)=>strengthSetRow(activity,session,segment,item,index)).join('')}</div>
+          ${readonly?'':`<button class="training-small-button" data-action="strength.set.add" data-session="${session.id}" data-segment="${segment.id}">+ Satz</button>`}`
+        :entry?cardioFields(activity,session,segment,entry):''}
+      ${readonly?'':`<button class="training-remove-exercise" data-action="strength.segment.remove"
+        data-session="${session.id}" data-segment="${segment.id}">Übung aus dieser Session entfernen</button>`}
+    </div>`:''}
+  </section>`;
+}
+
+function completedTodayView(state,session){
+  return`<div class="training-session-heading completed">
+      <div><span class="eyebrow"><i></i>Erledigt</span><h1>${escapeHtml(sessionTitle(state,session))}</h1><p>${escapeHtml(formatDate(session.datum))}</p></div>
+      <strong id="strength-session-summary">${escapeHtml(strengthSessionSummaryText(state,session))}</strong>
+    </div>
+    <div class="training-segment-list">${(session.segmente??[]).map(segment=>trainingSegmentCard(state,session,segment,true)).join('')}</div>
+    ${session.notiz?.trim()?`<section class="panel training-note readonly"><span>Notiz zum Tag</span><p>${escapeHtml(session.notiz.trim())}</p></section>`:''}
+    <section class="training-finished">
+      <strong>Einheit abgeschlossen ✓</strong>
+      <button class="training-small-button" data-action="strength.session.reopen" data-session="${session.id}">Wieder öffnen</button>
+    </section>`;
+}
+
+function openSessionView(state,session){
+  return`<div class="training-session-heading">
+      <div><span class="eyebrow"><i></i>Heute</span><h1>${escapeHtml(sessionTitle(state,session))}</h1><p>${escapeHtml(formatDate(session.datum))}</p></div>
+      <strong id="strength-session-summary">${escapeHtml(strengthSessionSummaryText(state,session))}</strong>
+    </div>
+    <div class="training-segment-list">${(session.segmente??[]).map(segment=>trainingSegmentCard(state,session,segment,false)).join('')}</div>
+    <button class="training-add-exercise" data-action="strength.picker.open" data-session="${session.id}">+ Übung hinzufügen</button>
+    <label class="training-note">
+      <span>Notiz zum Tag</span>
+      <textarea rows="2" placeholder="z. B. Schulter links hat gezwickt …"
+        data-strength-note data-session="${session.id}">${escapeHtml(session.notiz??'')}</textarea>
+    </label>
+    <button class="training-complete" data-action="strength.session.complete" data-session="${session.id}">Einheit abschließen ✓</button>`;
+}
+
+function readyTodayView(model){
+  if(!model.plan){
+    return`<section class="strength-start-empty panel">
+      <h2>Noch kein Plan</h2>
+      <p>Lege später im Plan-Tab Einheiten an oder starte eine freie Session.</p>
+      <div class="training-start-actions single">
+        <button class="training-primary" data-action="strength.free">Freie Session starten</button>
+      </div>
+    </section>`;
+  }
+
+  if(!model.unit){
+    return`<section class="strength-start-empty panel"><h2>Keine Einheit gefunden</h2><p>Der Kraftzyklus enthält keine gültige Einheit.</p></section>`;
+  }
+
+  return`<section class="strength-start-card ${model.restDay.isRestDay?'rest':''}">
+    <span class="strength-kicker">${model.restDay.isRestDay?'☾ Rest Day':'● Nächste Einheit'}</span>
+    <h1>${escapeHtml(model.unit.name)}</h1>
+    <p>${model.unitActivities.length} ${model.unitActivities.length===1?'Übung':'Übungen'} im Plan</p>
+    <div class="training-start-actions">
+      <button class="training-primary" data-action="strength.start" data-unit="${model.unit.id}">Jetzt starten</button>
+      <button class="training-secondary" data-action="strength.skip" data-unit="${model.unit.id}" data-name="${escapeHtml(model.unit.name)}">Überspringen ›</button>
+    </div>
+    <button class="training-free" data-action="strength.free">Freie Session starten</button>
+  </section>`;
+}
+
+function todayView(state){
+  const model=todayStrengthModel(state);
+
+  let content;
+  if(model.open)content=openSessionView(state,model.open);
+  else if(model.completed)content=completedTodayView(state,model.completed);
+  else content=readyTodayView(model);
+
+  return pageShell('today',`<div class="strength-today">${content}</div>`);
+}
+
+function exercisePickerView(){
+  if(!exercisePicker)return'';
+
+  const{state,sessionId}=exercisePicker;
+  const activities=strengthActivities(state);
+
+  return`<div class="strength-picker-backdrop" data-action="strength.picker.close"></div>
+    <section class="strength-picker" role="dialog" aria-modal="true">
+      <header><div><span class="eyebrow"><i></i>Kraft</span><h2>Übung hinzufügen</h2></div>
+        <button class="icon-button" data-action="strength.picker.close">×</button></header>
+      <input class="strength-picker-search" type="search" placeholder="Übung suchen …" data-strength-picker-search>
+      <div class="strength-picker-list">${activities.map(activity=>`
+        <button class="strength-picker-choice" data-action="strength.picker.choose"
+          data-session="${sessionId}" data-activity="${activity.id}" data-search="${escapeHtml(activity.name.toLowerCase())}">
+          <span class="exercise-kind ${isStrengthActivity(activity)?'strength':'cardio'}">${isStrengthActivity(activity)?icons.strength:icons.cardio}</span>
+          <span><strong>${escapeHtml(activity.name)}</strong><small>${escapeHtml(activityType(activity))}${activityFlags(activity).length?` · ${escapeHtml(activityFlags(activity).join(' · '))}`:''}</small></span>
+          ${icons.chevron}
+        </button>`).join('')}</div>
+    </section>`;
+}
+
+export function resetStrengthSessionUi(session){
+  collapsedSegments.clear();
+  openedCompletedSegments.clear();
+  for(const segment of session?.segmente??[]){
+    if(segment.erledigt===true)collapsedSegments.add(segment.id);
+  }
+}
+
+export function toggleStrengthTrainingSegment(id,done=false){
+  if(done){
+    openedCompletedSegments.has(id)
+      ?openedCompletedSegments.delete(id)
+      :openedCompletedSegments.add(id);
+    return;
+  }
+
+  collapsedSegments.has(id)
+    ?collapsedSegments.delete(id)
+    :collapsedSegments.add(id);
+}
+
+export function syncStrengthSegmentDone(id,done){
+  collapsedSegments.delete(id);
+  openedCompletedSegments.delete(id);
+  if(done)collapsedSegments.add(id);
+}
+
+export function openStrengthExercisePicker(state,sessionId){
+  exercisePicker={state,sessionId};
+}
+
+export function closeStrengthExercisePicker(){
+  exercisePicker=null;
+}
+
+export function strengthExerciseWasAdded(segment){
+  exercisePicker=null;
+  collapsedSegments.delete(segment.id);
+}
 function cycleSection(state){
   const rows=cycleRows(state);
 

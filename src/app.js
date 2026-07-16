@@ -4,12 +4,37 @@ import{todayIso,shiftMonth}from'./core/date.js';
 import{dashboardView}from'./features/dashboard/dashboard.js';
 import{calendarView,daySheetView}from'./features/calendar/calendar.js';
 import{
+  closeStrengthExercisePicker,
+  openStrengthExercisePicker,
+  resetStrengthSessionUi,
   setStrengthLibraryFilter,
+  strengthExerciseWasAdded,
   strengthView,
+  syncStrengthSegmentDone,
   toggleStrengthExercise,
   toggleStrengthHistory,
+  toggleStrengthTrainingSegment,
   toggleStrengthUnit
 }from'./features/strength/strength.js';
+import{
+  addStrengthActivityToSession,
+  addStrengthSet,
+  completeStrengthSession,
+  removeStrengthSegment,
+  removeStrengthSet,
+  reopenStrengthSession,
+  setStrengthAlternative,
+  setStrengthMetric,
+  setStrengthSessionNote,
+  skipCurrentStrengthUnit,
+  startFreeStrengthSession,
+  startPlannedStrengthSession,
+  strengthSessionById,
+  strengthSessionSummaryText,
+  toggleStrengthAssistSign,
+  toggleStrengthSegmentDone,
+  toggleStrengthWarmup
+}from'./features/strength/strength-session.js';
 import{icons}from'./ui/icons.js';
 import{escapeHtml,moduleName}from'./ui/format.js';
 
@@ -261,6 +286,31 @@ function downloadBackup(){
   showToast('Backup-Download gestartet ✓');
 }
 
+function strengthMutation(callback,{toast=null,renderAfter=true}={}){
+  try{
+    const result=callback();
+    save(state);
+    if(renderAfter)render();
+    if(toast)showToast(toast);
+    return result;
+  }catch(error){
+    showDialog({
+      eyebrow:'Kraft',
+      title:'Aktion nicht möglich',
+      text:error.message,
+      confirmText:'Schließen',
+      cancelText:null
+    });
+    return null;
+  }
+}
+
+function updateStrengthSummary(sessionId){
+  const element=document.querySelector('#strength-session-summary');
+  const session=strengthSessionById(state,sessionId);
+  if(element&&session)element.textContent=strengthSessionSummaryText(state,session);
+}
+
 document.addEventListener('click',event=>{
   const element=event.target.closest('[data-action]');
   if(!element)return;
@@ -280,6 +330,62 @@ document.addEventListener('click',event=>{
     go(element.dataset.module==='kraft'?'/module/kraft/today':`/module/${element.dataset.module}`);
   }
   else if(action==='strength.nav')go(element.dataset.path);
+  else if(action==='strength.start'){
+    const session=strengthMutation(()=>startPlannedStrengthSession(state,element.dataset.unit),{renderAfter:false});
+    if(session){resetStrengthSessionUi(session);render()}
+  }
+  else if(action==='strength.free'){
+    const session=strengthMutation(()=>startFreeStrengthSession(state),{renderAfter:false});
+    if(session){resetStrengthSessionUi(session);render()}
+  }
+  else if(action==='strength.skip'){
+    const name=element.dataset.name||'Einheit';
+    showDialog({
+      eyebrow:'Kraft · Heute',
+      title:'Einheit überspringen?',
+      text:`„${name}" wird für heute übersprungen. Danach erscheint direkt die nächste Zyklusposition.`,
+      confirmText:'Überspringen',
+      onConfirm:()=>strengthMutation(()=>skipCurrentStrengthUnit(state),{toast:`${name} wurde übersprungen ✓`})
+    });
+  }
+  else if(action==='strength.segment.toggle'){
+    const sessionElement=element.closest('[data-session-id]');
+    const segmentElement=element.closest('.training-segment');
+    toggleStrengthTrainingSegment(element.dataset.segment,segmentElement?.classList.contains('done')??false);
+    render();
+  }
+  else if(action==='strength.segment.done'){
+    const done=strengthMutation(()=>toggleStrengthSegmentDone(state,element.dataset.session,element.dataset.segment),{renderAfter:false});
+    if(done!==null){syncStrengthSegmentDone(element.dataset.segment,done);render()}
+  }
+  else if(action==='strength.set.add')strengthMutation(()=>addStrengthSet(state,element.dataset.session,element.dataset.segment));
+  else if(action==='strength.set.remove')strengthMutation(()=>removeStrengthSet(state,element.dataset.session,element.dataset.segment,element.dataset.entry));
+  else if(action==='strength.warmup.toggle')strengthMutation(()=>toggleStrengthWarmup(state,element.dataset.session,element.dataset.segment,element.dataset.entry));
+  else if(action==='strength.assist.toggle')strengthMutation(()=>toggleStrengthAssistSign(state,element.dataset.session,element.dataset.segment,element.dataset.entry));
+  else if(action==='strength.segment.remove'){
+    showDialog({
+      eyebrow:'Kraft · Heute',
+      title:'Übung entfernen?',
+      text:'Die Übung und ihre heute eingetragenen Werte werden aus dieser Session entfernt.',
+      confirmText:'Entfernen',
+      danger:true,
+      onConfirm:()=>strengthMutation(()=>removeStrengthSegment(state,element.dataset.session,element.dataset.segment))
+    });
+  }
+  else if(action==='strength.session.complete'){
+    const session=strengthMutation(()=>completeStrengthSession(state,element.dataset.session),{renderAfter:false});
+    if(session){resetStrengthSessionUi(session);render();showToast('Einheit abgeschlossen ✓')}
+  }
+  else if(action==='strength.session.reopen'){
+    const session=strengthMutation(()=>reopenStrengthSession(state,element.dataset.session),{renderAfter:false});
+    if(session){resetStrengthSessionUi(session);render()}
+  }
+  else if(action==='strength.picker.open'){openStrengthExercisePicker(state,element.dataset.session);render()}
+  else if(action==='strength.picker.close'){closeStrengthExercisePicker();render()}
+  else if(action==='strength.picker.choose'){
+    const segment=strengthMutation(()=>addStrengthActivityToSession(state,element.dataset.session,element.dataset.activity),{renderAfter:false});
+    if(segment){strengthExerciseWasAdded(segment);render()}
+  }
   else if(action==='strength.unit.toggle'){toggleStrengthUnit(element.dataset.id);render()}
   else if(action==='strength.exercise.toggle'){toggleStrengthExercise(element.dataset.id);render()}
   else if(action==='strength.history.toggle'){toggleStrengthHistory(element.dataset.id);render()}
@@ -359,6 +465,49 @@ document.addEventListener('click',event=>{
     render();
     callback?.();
   }
+});
+
+
+document.addEventListener('input',event=>{
+  const metric=event.target.closest('[data-strength-metric]');
+  if(metric){
+    strengthMutation(
+      ()=>setStrengthMetric(
+        state,
+        metric.dataset.session,
+        metric.dataset.segment,
+        metric.dataset.entry,
+        metric.dataset.type,
+        metric.value
+      ),
+      {renderAfter:false}
+    );
+    updateStrengthSummary(metric.dataset.session);
+    return;
+  }
+
+  const note=event.target.closest('[data-strength-note]');
+  if(note){
+    strengthMutation(()=>setStrengthSessionNote(state,note.dataset.session,note.value),{renderAfter:false});
+    return;
+  }
+
+  const search=event.target.closest('[data-strength-picker-search]');
+  if(search){
+    const query=search.value.trim().toLowerCase();
+    document.querySelectorAll('.strength-picker-choice').forEach(choice=>{
+      choice.hidden=query&&!choice.dataset.search.includes(query);
+    });
+  }
+});
+
+document.addEventListener('change',event=>{
+  const select=event.target.closest('[data-strength-alternative]');
+  if(!select)return;
+
+  strengthMutation(
+    ()=>setStrengthAlternative(state,select.dataset.session,select.dataset.segment,select.value)
+  );
 });
 
 fileInput.addEventListener('change',async()=>{

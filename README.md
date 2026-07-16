@@ -1,6 +1,6 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.2.0** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.2.1** enthält bewusst nur das Dashboard-Fundament.
 
 ## Aktueller Umfang
 
@@ -152,3 +152,29 @@ Diese Etappe ist absichtlich **nur lesend**. Das Kraftmodul übernimmt Datenstru
 - Fortschrittscharts
 
 Diese Schreib- und Trainingsabläufe folgen in Version 0.2.1 und späteren Kraft-Etappen.
+
+
+## Kraft-Heute 0.2.1
+
+- Zyklustag aus der Heute-Karte entfernt
+- kompakte Startkarte wie in der alten App
+- geplante Einheit starten
+- aktuelle Einheit überspringen
+- freie Session starten
+- offene Session wird nach Reload aus dem gespeicherten Zustand wiederhergestellt
+- alle geplanten Übungen starten aufgeklappt
+- Übungen lassen sich manuell auf- und zuklappen
+- abgehakte Übungen klappen automatisch zu
+- kompakte Kraftsatz-Felder
+- einarmige Wiederholungen links/rechts
+- assistierte Übungen mit Hilfe-/Zusatzgewicht-Umschalter
+- Aufwärmsätze
+- Cardiofelder aus den Messwerten der Aktivität
+- Dauer und Distanz werden korrekt in Sekunden und Meter gespeichert
+- Übungsalternativen können für den heutigen Tag gewählt werden
+- Übungen können einer freien oder geplanten Session hinzugefügt werden
+- Session-Notiz
+- Session abschließen und wieder öffnen
+- während der Eingabe wird gespeichert, ohne die Felder neu zu rendern
+
+Planbearbeitung folgt in 0.2.2. Verlauf/Fortschritt und Teilen folgen in 0.2.3.
