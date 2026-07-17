@@ -1,6 +1,6 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.2.1** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.2.1.1** enthält bewusst nur das Dashboard-Fundament.
 
 ## Aktueller Umfang
 
@@ -178,3 +178,13 @@ Diese Schreib- und Trainingsabläufe folgen in Version 0.2.1 und späteren Kraft
 - während der Eingabe wird gespeichert, ohne die Felder neu zu rendern
 
 Planbearbeitung folgt in 0.2.2. Verlauf/Fortschritt und Teilen folgen in 0.2.3.
+
+
+## Patch 0.2.1.1
+
+- im Verlauf wird bei einer Tagesalternative die tatsächlich gewählte Übung angezeigt
+- Beispiel: `Rudergerät` statt der ursprünglichen Planübung `Laufband`
+- nach „Einheit abschließen“ bleiben sämtliche Übungskarten im Heute-Tab geschlossen
+- abgeschlossene Tages-Sessions zeigen statt des Dropdown-Pfeils ein Sperrsymbol
+- Eingabewerte können erst nach „Wieder öffnen“ erneut bearbeitet werden
+- beim Fokussieren eines Kraft- oder Cardiofeldes wird der komplette vorhandene Wert markiert

@@ -5,6 +5,7 @@ import{
   completeStrengthSession,
   metricInputValue,
   parseDurationInput,
+  resolvedStrengthActivity,
   parseMetricInput,
   setStrengthMetric,
   skipCurrentStrengthUnit,
@@ -128,4 +129,37 @@ test('Session-Zusammenfassung nutzt nur erledigte Segmente',()=>{
   completeStrengthSession(state,session.id);
 
   assert.equal(strengthSessionSummaryText(state,session),'600 kg bewegt');
+});
+
+
+test('Eine gewählte Alternative wird als tatsächlich verwendete Aktivität aufgelöst',()=>{
+  const state=baseState();
+  state.bibliothek.push({
+    id:'machine',
+    name:'Rudergerät',
+    kategorie:'sonstiges',
+    messwerte:['dauer','distanz'],
+    einstellungen:{},
+    alternativen:[]
+  });
+  state.bibliothek[0].alternativen=['machine'];
+
+  const session=startPlannedStrengthSession(state,'upper','2026-07-15');
+  const segment=session.segmente[0];
+  segment.altOf='machine';
+
+  assert.equal(resolvedStrengthActivity(state,segment).name,'Rudergerät');
+});
+
+test('Werte einer vollständig abgeschlossenen Session können nicht geändert werden',()=>{
+  const state=baseState();
+  const session=startPlannedStrengthSession(state,'upper','2026-07-15');
+  const segment=session.segmente[1];
+  const entry=segment.eintraege[0];
+
+  completeStrengthSession(state,session.id);
+
+  assert.throws(()=>
+    setStrengthMetric(state,session.id,segment.id,entry.id,'gewicht','40')
+  );
 });

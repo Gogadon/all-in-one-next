@@ -389,3 +389,16 @@ select,
   .training-set.unilateral{grid-template-columns:29px minmax(0,1fr) 10px minmax(0,.55fr) 8px minmax(0,.55fr) 23px}
   .training-set.unilateral:has(.assist-sign){grid-template-columns:29px 29px minmax(0,1fr) 10px minmax(0,.55fr) 8px minmax(0,.55fr) 23px}
 }
+
+
+/* 0.2.1.1 — abgeschlossene Tages-Session ist vollständig gesperrt */
+.training-segment.locked .training-segment-title{cursor:default}
+.training-segment.locked .training-fold{
+  color:var(--muted-2);
+  opacity:.72;
+  pointer-events:none
+}
+.training-segment.locked .training-fold svg{
+  width:16px;
+  height:16px
+}

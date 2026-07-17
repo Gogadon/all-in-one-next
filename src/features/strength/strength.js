@@ -246,33 +246,41 @@ function trainingSegmentCard(state,session,segment,readonly=false){
   const activity=resolvedStrengthActivity(state,segment);
   if(!activity)return'';
 
-  const open=segmentOpen(segment,readonly);
+  // Nach dem vollständigen Abschluss des Trainingstags sind sämtliche
+  // Übungskarten fest geschlossen. Erst „Wieder öffnen“ macht sie wieder
+  // interaktiv. Einzelne abgehakte Übungen dürfen während einer offenen
+  // Session weiterhin erneut aufgeklappt und korrigiert werden.
+  const open=readonly?false:segmentOpen(segment,false);
   const checked=segment.erledigt===true;
   const summary=segmentSummary(state,segment);
   const deviceNote=(activity.notiz??'').trim();
   const entry=segment.eintraege?.[0];
 
-  return`<section class="training-segment ${checked?'done':''} ${readonly?'readonly':''}">
+  const titleContent=`<strong><i class="activity-dot ${isStrengthActivity(activity)?'kraft':'rad'}"></i>${escapeHtml(activity.name)}</strong>
+    <small>${escapeHtml(summary)}</small>`;
+
+  return`<section class="training-segment ${checked?'done':''} ${readonly?'readonly locked':''}">
     <div class="training-segment-head">
       ${readonly
         ?`<span class="training-check ${checked?'checked':''}">${checked?'✓':'·'}</span>`
         :`<button class="training-check ${checked?'checked':''}" data-action="strength.segment.done"
           data-session="${session.id}" data-segment="${segment.id}" aria-label="Übung abschließen">${checked?'✓':''}</button>`}
-      <button class="training-segment-title" data-action="strength.segment.toggle" data-segment="${segment.id}">
-        <strong><i class="activity-dot ${isStrengthActivity(activity)?'kraft':'rad'}"></i>${escapeHtml(activity.name)}</strong>
-        <small>${escapeHtml(summary)}</small>
-      </button>
-      <button class="training-fold ${open?'open':''}" data-action="strength.segment.toggle" data-segment="${segment.id}" aria-label="Aufklappen">${icons.chevron}</button>
+      ${readonly
+        ?`<div class="training-segment-title">${titleContent}</div>`
+        :`<button class="training-segment-title" data-action="strength.segment.toggle" data-segment="${segment.id}">${titleContent}</button>`}
+      ${readonly
+        ?`<span class="training-fold locked" aria-hidden="true">${icons.lock}</span>`
+        :`<button class="training-fold ${open?'open':''}" data-action="strength.segment.toggle" data-segment="${segment.id}" aria-label="Aufklappen">${icons.chevron}</button>`}
     </div>
     ${deviceNote?`<div class="training-device-note">${icons.info}<span>${escapeHtml(deviceNote)}</span></div>`:''}
     ${open?`<div class="training-segment-body">
-      ${readonly?'':alternativePicker(state,session,segment)}
+      ${alternativePicker(state,session,segment)}
       ${isStrengthActivity(activity)
         ?`<div class="training-sets">${(segment.eintraege??[]).map((item,index)=>strengthSetRow(activity,session,segment,item,index)).join('')}</div>
-          ${readonly?'':`<button class="training-small-button" data-action="strength.set.add" data-session="${session.id}" data-segment="${segment.id}">+ Satz</button>`}`
+          <button class="training-small-button" data-action="strength.set.add" data-session="${session.id}" data-segment="${segment.id}">+ Satz</button>`
         :entry?cardioFields(activity,session,segment,entry):''}
-      ${readonly?'':`<button class="training-remove-exercise" data-action="strength.segment.remove"
-        data-session="${session.id}" data-segment="${segment.id}">Übung aus dieser Session entfernen</button>`}
+      <button class="training-remove-exercise" data-action="strength.segment.remove"
+        data-session="${session.id}" data-segment="${segment.id}">Übung aus dieser Session entfernen</button>
     </div>`:''}
   </section>`;
 }
@@ -487,8 +495,11 @@ function libraryView(state){
 }
 
 function historySegmentRow(state,segment){
-  const activity=activityById(state,segment.aktivitaetId);
-  if(!activity)return`<div class="history-segment missing">Fehlende Aktivität · ${escapeHtml(segment.aktivitaetId)}</div>`;
+  // Eine Tagesalternative besitzt weiterhin die ursprüngliche aktivitaetId,
+  // während altOf auf die tatsächlich verwendete Bibliotheksübung zeigt.
+  // Im Verlauf muss deshalb die aufgelöste Aktivität angezeigt werden.
+  const activity=resolvedStrengthActivity(state,segment);
+  if(!activity)return`<div class="history-segment missing">Fehlende Aktivität · ${escapeHtml(segment.altOf??segment.aktivitaetId)}</div>`;
 
   if(activity.kategorie==='kraft'){
     const entries=segment.eintraege??[];

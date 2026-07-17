@@ -8,6 +8,7 @@ export const icons={
   history:svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>'),
   cardio:svg('<path d="M4 15c2-5 4-5 6 0s4 5 6 0 3-4 4-2"/><path d="M3 19h18"/>'),
   info:svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.5" r=".7" fill="currentColor" stroke="none"/>'),
+  lock:svg('<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'),
   swap:svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   cycling:svg('<circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5l5-8 7 8M11 8.5h5"/>'),
   hiking:svg('<path d="M7 4v8.4c0 1.5-.7 2.8-2 3.7L3.5 17a2.5 2.5 0 0 0 1.3 4.7h11.8a3.4 3.4 0 0 0 3.4-3.4v-1.1c0-1.3-.7-2.5-1.9-3.1l-5.6-2.8V7.6"/><path d="M7 8h5.5M7 11h5.5M6.2 17h13.3"/>'),

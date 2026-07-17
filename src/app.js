@@ -349,9 +349,13 @@ document.addEventListener('click',event=>{
     });
   }
   else if(action==='strength.segment.toggle'){
-    const sessionElement=element.closest('[data-session-id]');
     const segmentElement=element.closest('.training-segment');
-    toggleStrengthTrainingSegment(element.dataset.segment,segmentElement?.classList.contains('done')??false);
+    if(segmentElement?.classList.contains('locked'))return;
+
+    toggleStrengthTrainingSegment(
+      element.dataset.segment,
+      segmentElement?.classList.contains('done')??false
+    );
     render();
   }
   else if(action==='strength.segment.done'){
@@ -467,6 +471,15 @@ document.addEventListener('click',event=>{
   }
 });
 
+
+document.addEventListener('focusin',event=>{
+  const input=event.target.closest('input[data-strength-metric]');
+  if(!input||input.readOnly||input.disabled)return;
+
+  // Auf Android erfolgt die endgültige Cursorplatzierung teilweise erst nach
+  // dem Focus-Event. Deshalb im nächsten Frame markieren.
+  requestAnimationFrame(()=>input.select());
+});
 
 document.addEventListener('input',event=>{
   const metric=event.target.closest('[data-strength-metric]');
