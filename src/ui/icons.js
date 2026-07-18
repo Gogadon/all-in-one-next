@@ -18,5 +18,6 @@ export const icons={
   chevron:svg('<path d="m9 18 6-6-6-6"/>'),
   export:svg('<path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 13v7h14v-7"/>'),
   import:svg('<path d="M12 15V3M8 11l4 4 4-4"/><path d="M5 13v7h14v-7"/>'),
+  edit:svg('<path d="m4 20 4.5-1 9.8-9.8a2.1 2.1 0 0 0-3-3L5.5 16z"/><path d="m13.8 7.7 3 3"/>'),
   trash:svg('<path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14"/>')
 };

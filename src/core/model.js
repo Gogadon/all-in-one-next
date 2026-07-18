@@ -14,7 +14,8 @@ export function dayStatus(state,module,iso){const sessions=(state.sessions??[]).
 export const skipsOnDay=(state,module,iso)=>(state.sessions??[]).filter(session=>session.datum===iso&&sessionModule(session)===module&&session.uebersprungen).length;
 export function isRestUnit(state,unit){
   if(!unit)return false;
-  if(unit.typ==='rest'||unit.restDay===true)return true;
+  if(typeof unit.restDay==='boolean')return unit.restDay;
+  if(unit.typ==='rest')return true;
   const segments=unit.segmente??[];
   if(!segments.length)return false;
   const activities=segments.map(segment=>activityById(state,segment.aktivitaetId)).filter(Boolean);

@@ -65,11 +65,10 @@ export function unitUsage(state,unitId){
 
 export function restDayInfo(state,unit){
   if(!unit)return{isRestDay:false,source:null};
-  if(unit.restDay===true||unit.typ==='rest')return{isRestDay:true,source:'explicit'};
-  return{
-    isRestDay:isRestUnit(state,unit),
-    source:isRestUnit(state,unit)?'detected':null
-  };
+  if(typeof unit.restDay==='boolean')return{isRestDay:unit.restDay,source:'explicit'};
+  if(unit.typ==='rest')return{isRestDay:true,source:'explicit'};
+  const detected=isRestUnit(state,unit);
+  return{isRestDay:detected,source:detected?'detected':null};
 }
 
 export function cycleRows(state,date=todayIso()){

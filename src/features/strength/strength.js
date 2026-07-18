@@ -26,6 +26,10 @@ import{
   resolvedStrengthActivity,
   strengthSessionSummaryText
 }from'./strength-session.js';
+import{
+  STRENGTH_METRICS,
+  activeStrengthActivities
+}from'./strength-plan.js';
 
 const expandedUnits=new Set();
 const expandedExercises=new Set();
@@ -35,6 +39,7 @@ const openedCompletedSegments=new Set();
 
 let libraryFilter='all';
 let exercisePicker=null;
+let strengthEditorOverlay=null;
 
 const metricLabels={
   gewicht:'Gewicht',
@@ -68,15 +73,16 @@ function strengthBottomNav(view){
 }
 
 function pageShell(view,content){
-  return`<section class="strength-page">${content}</section>${strengthBottomNav(view)}${exercisePickerView()}`;
+  return`<section class="strength-page">${content}</section>${strengthBottomNav(view)}${exercisePickerView()}${strengthEditorOverlayView()}`;
 }
 
-function readOnlyBanner(text='Bearbeiten von Plan und Bibliotheken folgt in 0.2.2.'){
-  return`<div class="strength-readonly">${icons.info}<span><strong>Ausbaustufe 0.2.1</strong>${escapeHtml(text)}</span></div>`;
+function readOnlyBanner(text='Fortschrittscharts und Teilen folgen in 0.2.3.'){
+  return`<div class="strength-readonly">${icons.info}<span><strong>Ausbaustufe 0.2.2</strong>${escapeHtml(text)}</span></div>`;
 }
 
 function activityType(activity){
-  return activity?.kategorie==='kraft'?'Kraft':'Cardio';
+  if(!activity)return'Unbekannt';
+  return activity.kategorie==='kraft'?'Kraft':'Cardio';
 }
 
 function activityFlags(activity){
@@ -355,7 +361,7 @@ function exercisePickerView(){
   if(!exercisePicker)return'';
 
   const{state,sessionId}=exercisePicker;
-  const activities=strengthActivities(state);
+  const activities=activeStrengthActivities(state);
 
   return`<div class="strength-picker-backdrop" data-action="strength.picker.close"></div>
     <section class="strength-picker" role="dialog" aria-modal="true">
@@ -411,17 +417,151 @@ export function strengthExerciseWasAdded(segment){
   exercisePicker=null;
   collapsedSegments.delete(segment.id);
 }
+function overlayShell(title,content,{wide=false}={}){
+  return`<div class="strength-editor-backdrop" data-action="strength.editor.close"></div>
+    <section class="strength-editor-sheet ${wide?'wide':''}" role="dialog" aria-modal="true">
+      <header><div><span class="eyebrow"><i></i>Kraft</span><h2>${escapeHtml(title)}</h2></div>
+        <button class="icon-button" data-action="strength.editor.close">×</button></header>
+      <div class="strength-editor-content">${content}</div>
+    </section>`;
+}
+
+function metricCheckboxes(selected=[]){
+  const labels={
+    gewicht:'Gewicht',wdh:'Wiederholungen',dauer:'Dauer',distanz:'Distanz',
+    puls_avg:'Ø Puls',puls_max:'Max. Puls',kalorien:'Kalorien',hoehenmeter:'Höhenmeter',
+    schritte:'Schritte',tempo_avg:'Ø Tempo',tempo_max:'Max. Tempo',watt_avg:'Ø Leistung',
+    trittfrequenz:'Trittfrequenz'
+  };
+  return`<div class="editor-check-grid">${STRENGTH_METRICS.map(metric=>`<label>
+    <input type="checkbox" name="metrics" value="${metric}" ${selected.includes(metric)?'checked':''}>
+    <span>${escapeHtml(labels[metric]??metric)}</span></label>`).join('')}</div>`;
+}
+
+function strengthEditorOverlayView(){
+  if(!strengthEditorOverlay)return'';
+  const{type,state}=strengthEditorOverlay;
+
+  if(type==='cycle-add'){
+    const units=strengthUnits(state);
+    return overlayShell('Einheit zum Zyklus hinzufügen',`
+      <p class="editor-help">Eine Einheit darf mehrfach im Zyklus vorkommen.</p>
+      <div class="editor-choice-list">${units.map(unit=>`<button data-action="strength.cycle.add.choose" data-unit="${unit.id}">
+        <span><strong>${escapeHtml(unit.name)}</strong><small>${unitActivities(state,unit).length} Übungen · ${unitUsage(state,unit.id)}× im Zyklus</small></span>${icons.chevron}</button>`).join('')||'<p class="editor-empty">Lege zuerst eine Einheit an.</p>'}</div>`);
+  }
+
+  if(type==='correct-today'){
+    const rows=cycleRows(state);
+    return overlayShell('Zyklusposition wählen',`
+      <p class="editor-help">Die heutige offene oder abgeschlossene Kraftsession wird beim Bestätigen vollständig verworfen.</p>
+      <div class="editor-choice-list numbered">${rows.map(row=>`<button data-action="strength.correct.choose" data-index="${row.index}" data-name="${escapeHtml(row.unit?.name??'Einheit')}">
+        <b>${row.index+1}</b><span><strong>${escapeHtml(row.unit?.name??'Fehlende Einheit')}</strong><small>${row.restDay.isRestDay?'Rest Day':'Krafteinheit'}${row.isCurrent?' · aktuell':''}</small></span>${icons.chevron}</button>`).join('')}</div>`);
+  }
+
+  if(type==='unit-form'){
+    const unit=strengthEditorOverlay.unitId?strengthUnits(state).find(item=>item.id===strengthEditorOverlay.unitId):null;
+    return overlayShell(unit?'Einheit bearbeiten':'Einheit anlegen',`
+      <form id="strength-unit-form" class="editor-form" data-unit="${unit?.id??''}">
+        <label><span>Name</span><input name="name" required value="${escapeHtml(unit?.name??'')}" placeholder="z. B. Rücken · Bizeps"></label>
+        <label class="editor-switch"><input type="checkbox" name="restDay" ${unit&&(unit.restDay===true||unit.typ==='rest'||restDayInfo(state,unit).isRestDay)?'checked':''}>
+          <span><strong>Als Rest Day markieren</strong><small>Wird beim Tageswechsel automatisch weitergeschaltet.</small></span></label>
+        <button type="button" class="editor-primary" data-action="strength.unit.save">${unit?'Änderungen speichern':'Einheit anlegen'}</button>
+      </form>`);
+  }
+
+  if(type==='unit-activity'){
+    const unit=strengthUnits(state).find(item=>item.id===strengthEditorOverlay.unitId);
+    const activities=activeStrengthActivities(state);
+    return overlayShell(`Übung zu ${unit?.name??'Einheit'} hinzufügen`,`
+      <input class="editor-search" type="search" placeholder="Übung suchen …" data-editor-search>
+      <div class="editor-choice-list">${activities.map(activity=>`<button data-action="strength.unit.activity.choose" data-unit="${unit?.id??''}" data-activity="${activity.id}" data-search="${escapeHtml(activity.name.toLowerCase())}">
+        <span><strong>${escapeHtml(activity.name)}</strong><small>${escapeHtml(activityType(activity))}${activity.archiviert?' · archiviert':''}</small></span>${icons.chevron}</button>`).join('')}</div>`);
+  }
+
+  if(type==='activity-form'){
+    const activity=strengthEditorOverlay.activityId?state.bibliothek.find(item=>item.id===strengthEditorOverlay.activityId):null;
+    const settings=activity?.einstellungen??{};
+    const prog=settings.prog??{};
+    return overlayShell(activity?'Übung bearbeiten':'Übung anlegen',`
+      <form id="strength-activity-form" class="editor-form" data-activity="${activity?.id??''}">
+        <label><span>Name</span><input name="name" required value="${escapeHtml(activity?.name??'')}" placeholder="z. B. Lat-Zug Dreiecksgriff"></label>
+        <label><span>Typ</span><select name="category" data-activity-category>
+          <option value="kraft" ${activity?.kategorie==='kraft'?'selected':''}>Kraft</option>
+          <option value="sonstiges" ${activity&&activity.kategorie!=='kraft'?'selected':''}>Cardio / Sonstiges</option>
+        </select></label>
+        <div class="editor-section"><span>Messwerte</span>${metricCheckboxes(activity?.messwerte??(!activity||activity.kategorie==='kraft'?['gewicht','wdh']:['dauer','puls_avg','puls_max']))}</div>
+        <div class="editor-strength-settings ${activity&&activity.kategorie!=='kraft'?'hidden':''}" data-strength-settings>
+          <div class="editor-two-switches">
+            <label class="editor-switch compact"><input type="checkbox" name="unilateral" ${settings.einarmig?'checked':''}><span><strong>Einarmig</strong><small>Linke und rechte Wiederholungen getrennt</small></span></label>
+            <label class="editor-switch compact"><input type="checkbox" name="assisted" ${settings.assist?'checked':''}><span><strong>Assistiert</strong><small>Hilfegewicht als negativer Wert</small></span></label>
+          </div>
+          <label><span>Progression</span><select name="progression" data-progression-select>
+            <option value="off" ${!prog.art||prog.art==='off'?'selected':''}>Aus</option>
+            <option value="double" ${prog.art==='double'?'selected':''}>Double Progression</option>
+            <option value="strength" ${prog.art==='strength'?'selected':''}>Feste Wiederholungen</option>
+            <option value="technik" ${prog.art==='technik'?'selected':''}>Technik</option>
+          </select></label>
+          <div class="editor-progression-fields ${!prog.art||prog.art==='off'||prog.art==='technik'?'hidden':''}" data-progression-fields>
+            <label data-progression-common><span>Sätze</span><input name="sets" inputmode="numeric" value="${prog.saetze??4}"></label>
+            <label data-progression-common><span>Schritt · kg</span><input name="step" inputmode="decimal" value="${prog.schritt??2.5}"></label>
+            <label data-progression-double class="${prog.art&&prog.art!=='double'?'hidden':''}"><span>Wdh. min</span><input name="repsMin" inputmode="numeric" value="${prog.wdhMin??8}"></label>
+            <label data-progression-double class="${prog.art&&prog.art!=='double'?'hidden':''}"><span>Wdh. max</span><input name="repsMax" inputmode="numeric" value="${prog.wdhMax??12}"></label>
+            <label data-progression-strength class="${prog.art!=='strength'?'hidden':''}"><span>Feste Wdh.</span><input name="reps" inputmode="numeric" value="${prog.wdh??12}"></label>
+          </div>
+        </div>
+        <label><span>Notiz / Gerät</span><textarea name="note" rows="3" placeholder="z. B. Sitzposition oder Gerätehinweis">${escapeHtml(activity?.notiz??'')}</textarea></label>
+        <button type="button" class="editor-primary" data-action="strength.activity.save">${activity?'Änderungen speichern':'Übung anlegen'}</button>
+      </form>`,{wide:true});
+  }
+
+  if(type==='alternative-add'){
+    const activity=state.bibliothek.find(item=>item.id===strengthEditorOverlay.activityId);
+    const linked=new Set(activity?.alternativen??[]);
+    const choices=activeStrengthActivities(state).filter(item=>item.id!==activity?.id&&!linked.has(item.id));
+    return overlayShell(`Alternative für ${activity?.name??'Übung'}`,`
+      <input class="editor-search" type="search" placeholder="Alternative suchen …" data-editor-search>
+      <div class="editor-choice-list">${choices.map(item=>`<button data-action="strength.alternative.choose" data-activity="${activity?.id??''}" data-alternative="${item.id}" data-search="${escapeHtml(item.name.toLowerCase())}">
+        <span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(activityType(item))}</small></span>${icons.chevron}</button>`).join('')||'<p class="editor-empty">Keine weitere Übung verfügbar.</p>'}</div>`);
+  }
+
+  return'';
+}
+
+export function openStrengthCyclePicker(state){strengthEditorOverlay={type:'cycle-add',state}}
+export function openStrengthCorrectToday(state){strengthEditorOverlay={type:'correct-today',state}}
+export function openStrengthUnitEditor(state,unitId=null){strengthEditorOverlay={type:'unit-form',state,unitId}}
+export function openStrengthUnitActivityPicker(state,unitId){strengthEditorOverlay={type:'unit-activity',state,unitId}}
+export function openStrengthActivityEditor(state,activityId=null){strengthEditorOverlay={type:'activity-form',state,activityId}}
+export function openStrengthAlternativePicker(state,activityId){strengthEditorOverlay={type:'alternative-add',state,activityId}}
+export function closeStrengthEditor(){strengthEditorOverlay=null}
+
 function cycleSection(state){
   const rows=cycleRows(state);
 
   return`<p class="section-label">Zyklus · Ablauf</p>
-    <section class="panel strength-cycle">
+    <section class="panel strength-cycle editable">
       ${rows.length?rows.map(row=>`<div class="strength-cycle-row ${row.isCurrent?'current':''}">
         <span class="cycle-index">${row.index+1}</span>
         <div><strong>${escapeHtml(row.unit?.name??'Fehlende Einheit')}</strong><small>${row.restDay.isRestDay?'Rest Day · ':''}${row.isCurrent?'heute':'Zyklusposition'}</small></div>
-        ${row.isCurrent?'<b>Heute</b>':''}
+        <div class="cycle-actions">
+          <button data-action="strength.cycle.move" data-index="${row.index}" data-direction="-1" ${row.index===0?'disabled':''} aria-label="Hoch">↑</button>
+          <button data-action="strength.cycle.move" data-index="${row.index}" data-direction="1" ${row.index===rows.length-1?'disabled':''} aria-label="Runter">↓</button>
+          <button data-action="strength.cycle.remove" data-index="${row.index}" data-name="${escapeHtml(row.unit?.name??'Einheit')}" aria-label="Entfernen">×</button>
+        </div>
       </div>`).join(''):'<p class="strength-empty-copy">Der Zyklus ist leer.</p>'}
-    </section>`;
+    </section>
+    <div class="plan-action-row"><button class="training-small-button" data-action="strength.cycle.add.open">+ Einheit in den Zyklus</button>
+      ${rows.length?'<button class="training-small-button accent" data-action="strength.correct.open">Heute korrigieren</button>':''}</div>`;
+}
+
+function unitActivityEditorRows(state,unit){
+  const rows=unitActivities(state,unit);
+  return`<div class="unit-editor-rows">${rows.map(row=>`<div class="unit-editor-row">
+    <span>${row.index+1}</span><div><strong>${escapeHtml(row.activity?.name??'Fehlende Übung')}</strong><small>${escapeHtml(activityType(row.activity))}</small></div>
+    <div><button data-action="strength.unit.activity.move" data-unit="${unit.id}" data-index="${row.index}" data-direction="-1" ${row.index===0?'disabled':''}>↑</button>
+      <button data-action="strength.unit.activity.move" data-unit="${unit.id}" data-index="${row.index}" data-direction="1" ${row.index===rows.length-1?'disabled':''}>↓</button>
+      <button data-action="strength.unit.activity.remove" data-unit="${unit.id}" data-index="${row.index}" data-name="${escapeHtml(row.activity?.name??'Übung')}">×</button></div>
+  </div>`).join('')}</div>`;
 }
 
 function unitsSection(state){
@@ -437,13 +577,16 @@ function unitsSection(state){
       const activities=unitActivities(state,unit);
 
       return`<section class="panel strength-unit-card ${expanded?'expanded':''}">
-        <button class="strength-unit-head" data-action="strength.unit.toggle" data-id="${unit.id}">
+        <div class="strength-unit-head-wrap"><button class="strength-unit-head" data-action="strength.unit.toggle" data-id="${unit.id}">
           <span><strong>${escapeHtml(unit.name)}</strong><small>${activities.length} Übungen · ${unitUsage(state,unit.id)}× im Zyklus${rest.isRestDay?' · Rest Day':''}</small></span>
-          <i class="${expanded?'open':''}">${icons.chevron}</i>
-        </button>
-        ${expanded?`<div class="strength-unit-body">${activities.map(row=>compactActivityRow(state,row)).join('')}</div>`:''}
+          <i class="${expanded?'open':''}">${icons.chevron}</i></button>
+          <button class="unit-edit-button" data-action="strength.unit.edit" data-unit="${unit.id}" aria-label="Bearbeiten">${icons.edit}</button></div>
+        ${expanded?`<div class="strength-unit-body">${unitActivityEditorRows(state,unit)}
+          <button class="training-small-button" data-action="strength.unit.activity.open" data-unit="${unit.id}">+ Übung hinzufügen</button>
+          <button class="unit-delete-button" data-action="strength.unit.delete" data-unit="${unit.id}" data-name="${escapeHtml(unit.name)}">Einheit löschen</button></div>`:''}
       </section>`;
-    }).join('')}</div>`;
+    }).join('')}</div>
+    <button class="editor-primary plan-create-button" data-action="strength.unit.create">+ Einheit anlegen</button>`;
 }
 
 function planView(state){
@@ -451,25 +594,26 @@ function planView(state){
 
   return pageShell('plan',`
     <div class="strength-title"><span class="eyebrow"><i></i>Kraft</span><h1>Plan</h1><p>Zyklus und Einheitenbibliothek</p></div>
-    ${readOnlyBanner()}
-    ${plan?cycleSection(state):'<section class="panel strength-empty"><h2>Kein Plan vorhanden</h2><p>Im importierten Backup wurde kein Kraftplan gefunden.</p></section>'}
-    ${plan?unitsSection(state):''}
+    ${plan?cycleSection(state):'<section class="panel strength-empty"><h2>Noch kein Plan</h2><p>Lege deine erste Einheit an und füge sie anschließend in den Zyklus ein.</p></section>'}
+    ${unitsSection(state)}
   `);
 }
 
 function libraryView(state){
   const all=strengthActivities(state);
   const activities=all.filter(activity=>
-    libraryFilter==='all'
-    ||(libraryFilter==='strength'&&activity.kategorie==='kraft')
-    ||(libraryFilter==='cardio'&&activity.kategorie!=='kraft')
+    libraryFilter==='archived'?activity.archiviert:
+    !activity.archiviert&&(
+      libraryFilter==='all'
+      ||(libraryFilter==='strength'&&activity.kategorie==='kraft')
+      ||(libraryFilter==='cardio'&&activity.kategorie!=='kraft')
+    )
   );
 
   return pageShell('library',`
     <div class="strength-title library-title"><span class="eyebrow"><i></i>Kraft</span><h1>Übungsbibliothek</h1><p>Wiederverwendbare Übungen und ihre Alternativen</p></div>
-    ${readOnlyBanner()}
-    <div class="strength-filters">
-      ${[['all','Alle'],['strength','Kraft'],['cardio','Cardio']].map(([id,label])=>`<button class="${libraryFilter===id?'active':''}" data-action="strength.library.filter" data-filter="${id}">${label}</button>`).join('')}
+    <div class="strength-filters four">
+      ${[['all','Alle'],['strength','Kraft'],['cardio','Cardio'],['archived','Archiv']].map(([id,label])=>`<button class="${libraryFilter===id?'active':''}" data-action="strength.library.filter" data-filter="${id}">${label}</button>`).join('')}
     </div>
     <div class="library-count">${activities.length} von ${all.length} Aktivitäten</div>
     <div class="strength-exercise-list">${activities.map(activity=>{
@@ -477,20 +621,24 @@ function libraryView(state){
       const alternatives=alternativeActivities(state,activity);
       const flags=activityFlags(activity);
 
-      return`<section class="panel strength-exercise-card ${expanded?'expanded':''}">
+      return`<section class="panel strength-exercise-card ${expanded?'expanded':''} ${activity.archiviert?'archived':''}">
         <button class="strength-exercise-head" data-action="strength.exercise.toggle" data-id="${activity.id}">
           <span class="exercise-kind ${activity.kategorie==='kraft'?'strength':'cardio'}">${activity.kategorie==='kraft'?icons.strength:icons.cardio}</span>
-          <span><strong>${escapeHtml(activity.name)}</strong><small>${escapeHtml(activityType(activity))} · ${activityUsage(state,activity.id)}× in Einheiten · ${alternatives.length} Alternativen</small></span>
+          <span><strong>${escapeHtml(activity.name)}</strong><small>${escapeHtml(activityType(activity))} · ${activityUsage(state,activity.id)}× in Einheiten · ${alternatives.length} Alternativen${activity.archiviert?' · archiviert':''}</small></span>
           <i class="${expanded?'open':''}">${icons.chevron}</i>
         </button>
         ${expanded?`<div class="strength-exercise-body">
           <div class="exercise-meta"><span>Messwerte</span><p>${(activity.messwerte??[]).map(metric=>`<b>${escapeHtml(metricLabels[metric]??metric)}</b>`).join('')||'<em>Keine</em>'}</p></div>
           ${flags.length?`<div class="exercise-meta"><span>Einstellungen</span><p>${flags.map(flag=>`<b>${escapeHtml(flag)}</b>`).join('')}</p></div>`:''}
           ${activity.notiz?`<div class="exercise-note">${escapeHtml(activity.notiz)}</div>`:''}
-          <div class="exercise-alternatives"><span>Alternativen</span>${alternatives.length?alternatives.map(item=>`<div>${icons.swap}<strong>${escapeHtml(item.name)}</strong></div>`).join(''):'<p>Keine Alternativen verknüpft.</p>'}</div>
+          <div class="exercise-alternatives"><span>Alternativen</span>${alternatives.length?alternatives.map(item=>`<div>${icons.swap}<strong>${escapeHtml(item.name)}</strong><button data-action="strength.alternative.remove" data-activity="${activity.id}" data-alternative="${item.id}" data-name="${escapeHtml(item.name)}">×</button></div>`).join(''):'<p>Keine Alternativen verknüpft.</p>'}</div>
+          <div class="exercise-edit-actions"><button data-action="strength.activity.edit" data-activity="${activity.id}">${icons.edit} Bearbeiten</button>
+            <button data-action="strength.alternative.open" data-activity="${activity.id}">${icons.swap} Alternative</button>
+            <button class="${activity.archiviert?'reactivate':'archive'}" data-action="strength.activity.${activity.archiviert?'reactivate':'archive'}" data-activity="${activity.id}" data-name="${escapeHtml(activity.name)}">${activity.archiviert?'Reaktivieren':'Archivieren'}</button></div>
         </div>`:''}
       </section>`;
-    }).join('')}</div>
+    }).join('')||'<section class="panel strength-empty"><p>In diesem Filter sind keine Übungen vorhanden.</p></section>'}</div>
+    <button class="editor-primary plan-create-button" data-action="strength.activity.create">+ Übung anlegen</button>
   `);
 }
 
@@ -518,7 +666,7 @@ function historyView(state){
 
   return pageShell('history',`
     <div class="strength-title"><span class="eyebrow"><i></i>Kraft</span><h1>Verlauf</h1><p>Importierte, abgeschlossene Einheiten</p></div>
-    ${readOnlyBanner()}
+    ${readOnlyBanner('Fortschrittscharts und Teilen folgen in 0.2.3.')}
     <div class="history-summary"><strong>${sessions.length}</strong><span>abgeschlossene Einheiten</span></div>
     <div class="strength-history-list">${sessions.map(session=>{
       const expanded=expandedHistory.has(session.id);
@@ -555,5 +703,5 @@ export function toggleStrengthHistory(id){
 }
 
 export function setStrengthLibraryFilter(filter){
-  if(['all','strength','cardio'].includes(filter))libraryFilter=filter;
+  if(['all','strength','cardio','archived'].includes(filter))libraryFilter=filter;
 }

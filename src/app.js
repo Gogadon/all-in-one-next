@@ -1,11 +1,19 @@
 import{load,save,reset,importBackup,exportBackup}from'./core/storage.js';
 import{route,go,subscribe}from'./core/router.js';
+import{installViewportStability}from'./core/viewport.js';
 import{todayIso,shiftMonth}from'./core/date.js';
 import{dashboardView}from'./features/dashboard/dashboard.js';
 import{calendarView,daySheetView}from'./features/calendar/calendar.js';
 import{
+  closeStrengthEditor,
   closeStrengthExercisePicker,
+  openStrengthActivityEditor,
+  openStrengthAlternativePicker,
+  openStrengthCorrectToday,
+  openStrengthCyclePicker,
   openStrengthExercisePicker,
+  openStrengthUnitActivityPicker,
+  openStrengthUnitEditor,
   resetStrengthSessionUi,
   setStrengthLibraryFilter,
   strengthExerciseWasAdded,
@@ -35,6 +43,24 @@ import{
   toggleStrengthSegmentDone,
   toggleStrengthWarmup
 }from'./features/strength/strength-session.js';
+import{
+  addActivityToUnit,
+  addUnitToCycle,
+  archiveStrengthActivity,
+  correctStrengthToday,
+  createStrengthActivity,
+  createStrengthUnit,
+  deleteStrengthUnit,
+  linkStrengthAlternative,
+  moveActivityInUnit,
+  moveCycleEntry,
+  reactivateStrengthActivity,
+  removeActivityFromUnit,
+  removeCycleEntry,
+  unlinkStrengthAlternative,
+  updateStrengthActivity,
+  updateStrengthUnit
+}from'./features/strength/strength-plan.js';
 import{icons}from'./ui/icons.js';
 import{escapeHtml,moduleName}from'./ui/format.js';
 
@@ -59,11 +85,6 @@ const pullState={
   armed:false,
   reloading:false
 };
-
-function setAppHeight(){
-  const height=window.visualViewport?.height??window.innerHeight;
-  document.documentElement.style.setProperty('--app-height',`${height}px`);
-}
 
 function showDialog({
   eyebrow='All-in-One',
@@ -311,6 +332,43 @@ function updateStrengthSummary(sessionId){
   if(element&&session)element.textContent=strengthSessionSummaryText(state,session);
 }
 
+function formValues(form){
+  const data=new FormData(form);
+  return{
+    name:data.get('name')??'',
+    restDay:data.has('restDay'),
+    category:data.get('category')??'kraft',
+    metrics:data.getAll('metrics'),
+    unilateral:data.has('unilateral'),
+    assisted:data.has('assisted'),
+    progression:data.get('progression')??'off',
+    sets:data.get('sets')??'',
+    step:data.get('step')??'',
+    repsMin:data.get('repsMin')??'',
+    repsMax:data.get('repsMax')??'',
+    reps:data.get('reps')??'',
+    note:data.get('note')??''
+  };
+}
+
+function requireForm(selector){
+  const form=document.querySelector(selector);
+  if(!form)throw Error('Editorformular wurde nicht gefunden.');
+  return form;
+}
+
+function updateActivityEditorVisibility(form){
+  if(!form)return;
+  const category=form.elements.category?.value??'kraft';
+  const progression=form.elements.progression?.value??'off';
+  form.querySelector('[data-strength-settings]')?.classList.toggle('hidden',category!=='kraft');
+
+  const fields=form.querySelector('[data-progression-fields]');
+  fields?.classList.toggle('hidden',!['double','strength'].includes(progression));
+  form.querySelectorAll('[data-progression-double]').forEach(element=>element.classList.toggle('hidden',progression!=='double'));
+  form.querySelectorAll('[data-progression-strength]').forEach(element=>element.classList.toggle('hidden',progression!=='strength'));
+}
+
 document.addEventListener('click',event=>{
   const element=event.target.closest('[data-action]');
   if(!element)return;
@@ -329,7 +387,7 @@ document.addEventListener('click',event=>{
   else if(action==='module.open'){
     go(element.dataset.module==='kraft'?'/module/kraft/today':`/module/${element.dataset.module}`);
   }
-  else if(action==='strength.nav')go(element.dataset.path);
+  else if(action==='strength.nav'){closeStrengthEditor();closeStrengthExercisePicker();go(element.dataset.path)}
   else if(action==='strength.start'){
     const session=strengthMutation(()=>startPlannedStrengthSession(state,element.dataset.unit),{renderAfter:false});
     if(session){resetStrengthSessionUi(session);render()}
@@ -394,6 +452,122 @@ document.addEventListener('click',event=>{
   else if(action==='strength.exercise.toggle'){toggleStrengthExercise(element.dataset.id);render()}
   else if(action==='strength.history.toggle'){toggleStrengthHistory(element.dataset.id);render()}
   else if(action==='strength.library.filter'){setStrengthLibraryFilter(element.dataset.filter);render()}
+  else if(action==='strength.editor.close'){closeStrengthEditor();render()}
+  else if(action==='strength.cycle.add.open'){openStrengthCyclePicker(state);render()}
+  else if(action==='strength.cycle.add.choose'){
+    const name=state.plaene?.kraft?.einheiten?.find(unit=>unit.id===element.dataset.unit)?.name??'Einheit';
+    const result=strengthMutation(()=>addUnitToCycle(state,element.dataset.unit),{renderAfter:false});
+    if(result!==null){closeStrengthEditor();render();showToast(`${name} wurde zum Zyklus hinzugefügt ✓`)}
+  }
+  else if(action==='strength.cycle.move')strengthMutation(()=>moveCycleEntry(state,Number(element.dataset.index),Number(element.dataset.direction)));
+  else if(action==='strength.cycle.remove'){
+    const name=element.dataset.name||'Einheit';
+    showDialog({
+      eyebrow:'Kraft · Zyklus',
+      title:'Zyklusposition entfernen?',
+      text:`Nur diese Position von „${name}“ wird aus dem Ablauf entfernt. Die Einheit bleibt in der Bibliothek erhalten.`,
+      confirmText:'Position entfernen',
+      danger:true,
+      onConfirm:()=>strengthMutation(()=>removeCycleEntry(state,Number(element.dataset.index)))
+    });
+  }
+  else if(action==='strength.correct.open'){openStrengthCorrectToday(state);render()}
+  else if(action==='strength.correct.choose'){
+    const name=element.dataset.name||'Einheit';
+    const index=Number(element.dataset.index);
+    showDialog({
+      eyebrow:'Kraft · Heute korrigieren',
+      title:`${name} für heute setzen?`,
+      text:'Eine heutige offene, abgeschlossene oder übersprungene Kraftsession wird vollständig verworfen. Ältere Trainingstage bleiben unverändert.',
+      confirmText:'Heute korrigieren',
+      danger:true,
+      onConfirm:()=>{
+        const unit=strengthMutation(()=>correctStrengthToday(state,index),{renderAfter:false});
+        if(unit){closeStrengthEditor();resetStrengthSessionUi(null);go('/module/kraft/today');render();showToast(`${unit.name} ist jetzt für heute gesetzt ✓`)}
+      }
+    });
+  }
+  else if(action==='strength.unit.create'){openStrengthUnitEditor(state);render()}
+  else if(action==='strength.unit.edit'){openStrengthUnitEditor(state,element.dataset.unit);render()}
+  else if(action==='strength.unit.save'){
+    const form=requireForm('#strength-unit-form');
+    const values=formValues(form);
+    const unitId=form.dataset.unit;
+    const unit=strengthMutation(
+      ()=>unitId?updateStrengthUnit(state,unitId,values):createStrengthUnit(state,values),
+      {renderAfter:false}
+    );
+    if(unit){closeStrengthEditor();render();showToast(`${unit.name} wurde gespeichert ✓`)}
+  }
+  else if(action==='strength.unit.delete'){
+    const name=element.dataset.name||'Einheit';
+    showDialog({
+      eyebrow:'Kraft · Einheitenbibliothek',
+      title:`${name} löschen?`,
+      text:'Die Einheit wird aus der Bibliothek und aus allen Zykluspositionen entfernt. Bereits gespeicherte Trainingstage bleiben erhalten.',
+      confirmText:'Einheit löschen',
+      danger:true,
+      onConfirm:()=>strengthMutation(()=>deleteStrengthUnit(state,element.dataset.unit),{toast:`${name} wurde gelöscht`})
+    });
+  }
+  else if(action==='strength.unit.activity.open'){openStrengthUnitActivityPicker(state,element.dataset.unit);render()}
+  else if(action==='strength.unit.activity.choose'){
+    const activity=state.bibliothek.find(item=>item.id===element.dataset.activity);
+    const result=strengthMutation(()=>addActivityToUnit(state,element.dataset.unit,element.dataset.activity),{renderAfter:false});
+    if(result!==null){closeStrengthEditor();render();showToast(`${activity?.name??'Übung'} wurde hinzugefügt ✓`)}
+  }
+  else if(action==='strength.unit.activity.move')strengthMutation(()=>moveActivityInUnit(state,element.dataset.unit,Number(element.dataset.index),Number(element.dataset.direction)));
+  else if(action==='strength.unit.activity.remove'){
+    const name=element.dataset.name||'Übung';
+    showDialog({
+      eyebrow:'Kraft · Einheit',
+      title:`${name} entfernen?`,
+      text:'Die Übung wird nur aus dieser Einheitenvorlage entfernt. Bibliothek und Verlauf bleiben erhalten.',
+      confirmText:'Entfernen',
+      danger:true,
+      onConfirm:()=>strengthMutation(()=>removeActivityFromUnit(state,element.dataset.unit,Number(element.dataset.index)))
+    });
+  }
+  else if(action==='strength.activity.create'){openStrengthActivityEditor(state);render()}
+  else if(action==='strength.activity.edit'){openStrengthActivityEditor(state,element.dataset.activity);render()}
+  else if(action==='strength.activity.save'){
+    const form=requireForm('#strength-activity-form');
+    const values=formValues(form);
+    const activityId=form.dataset.activity;
+    const activity=strengthMutation(
+      ()=>activityId?updateStrengthActivity(state,activityId,values):createStrengthActivity(state,values),
+      {renderAfter:false}
+    );
+    if(activity){closeStrengthEditor();render();showToast(`${activity.name} wurde gespeichert ✓`)}
+  }
+  else if(action==='strength.activity.archive'){
+    const name=element.dataset.name||'Übung';
+    showDialog({
+      eyebrow:'Kraft · Übungsbibliothek',
+      title:`${name} archivieren?`,
+      text:'Die Übung verschwindet aus neuen Auswahllisten. Einheiten und vergangene Sessions bleiben vollständig lesbar.',
+      confirmText:'Archivieren',
+      onConfirm:()=>strengthMutation(()=>archiveStrengthActivity(state,element.dataset.activity),{toast:`${name} wurde archiviert`})
+    });
+  }
+  else if(action==='strength.activity.reactivate')strengthMutation(()=>reactivateStrengthActivity(state,element.dataset.activity),{toast:'Übung wurde reaktiviert ✓'});
+  else if(action==='strength.alternative.open'){openStrengthAlternativePicker(state,element.dataset.activity);render()}
+  else if(action==='strength.alternative.choose'){
+    const alternative=state.bibliothek.find(item=>item.id===element.dataset.alternative);
+    const result=strengthMutation(()=>linkStrengthAlternative(state,element.dataset.activity,element.dataset.alternative),{renderAfter:false});
+    if(result!==null){closeStrengthEditor();render();showToast(`${alternative?.name??'Alternative'} wurde verknüpft ✓`)}
+  }
+  else if(action==='strength.alternative.remove'){
+    const name=element.dataset.name||'Alternative';
+    showDialog({
+      eyebrow:'Kraft · Alternativen',
+      title:`${name} trennen?`,
+      text:'Nur die Verknüpfung wird entfernt. Die Übung selbst bleibt in der Bibliothek erhalten.',
+      confirmText:'Verknüpfung entfernen',
+      danger:true,
+      onConfirm:()=>strengthMutation(()=>unlinkStrengthAlternative(state,element.dataset.activity,element.dataset.alternative))
+    });
+  }
   else if(action==='nav.back')history.back();
   else if(action==='day.open'){
     selectedDay=element.dataset.date;
@@ -454,6 +628,8 @@ document.addEventListener('click',event=>{
       danger:true,
       onConfirm:()=>{
         state=reset();
+        closeStrengthEditor();
+        closeStrengthExercisePicker();
         selectedDay=null;
         openDaySessions.clear();
         go('/');
@@ -473,7 +649,7 @@ document.addEventListener('click',event=>{
 
 
 document.addEventListener('focusin',event=>{
-  const input=event.target.closest('input[data-strength-metric]');
+  const input=event.target.closest('input[data-strength-metric],.editor-form input[type="text"],.editor-form input[inputmode]');
   if(!input||input.readOnly||input.disabled)return;
 
   // Auf Android erfolgt die endgültige Cursorplatzierung teilweise erst nach
@@ -505,22 +681,29 @@ document.addEventListener('input',event=>{
     return;
   }
 
-  const search=event.target.closest('[data-strength-picker-search]');
+  const search=event.target.closest('[data-strength-picker-search],[data-editor-search]');
   if(search){
     const query=search.value.trim().toLowerCase();
-    document.querySelectorAll('.strength-picker-choice').forEach(choice=>{
-      choice.hidden=query&&!choice.dataset.search.includes(query);
+    const selector=search.matches('[data-editor-search]')?'.editor-choice-list [data-search]':'.strength-picker-choice';
+    document.querySelectorAll(selector).forEach(choice=>{
+      choice.hidden=Boolean(query&&!choice.dataset.search.includes(query));
     });
   }
 });
 
 document.addEventListener('change',event=>{
-  const select=event.target.closest('[data-strength-alternative]');
-  if(!select)return;
+  const alternative=event.target.closest('[data-strength-alternative]');
+  if(alternative){
+    strengthMutation(
+      ()=>setStrengthAlternative(state,alternative.dataset.session,alternative.dataset.segment,alternative.value)
+    );
+    return;
+  }
 
-  strengthMutation(
-    ()=>setStrengthAlternative(state,select.dataset.session,select.dataset.segment,select.value)
-  );
+  const activityControl=event.target.closest('[data-activity-category],[data-progression-select]');
+  if(activityControl){
+    updateActivityEditorVisibility(activityControl.closest('#strength-activity-form'));
+  }
 });
 
 fileInput.addEventListener('change',async()=>{
@@ -530,6 +713,8 @@ fileInput.addEventListener('change',async()=>{
   try{
     state=importBackup(await file.text());
     save(state);
+    closeStrengthEditor();
+    closeStrengthExercisePicker();
 
     selectedDay=null;
     openDaySessions.clear();
@@ -583,9 +768,7 @@ main.addEventListener('touchend',()=>{
 
 main.addEventListener('touchcancel',resetPullRefresh,{passive:true});
 
-setAppHeight();
-window.addEventListener('resize',setAppHeight);
-window.visualViewport?.addEventListener('resize',setAppHeight);
+installViewportStability({scrollContainer:main});
 
 subscribe(render);
 

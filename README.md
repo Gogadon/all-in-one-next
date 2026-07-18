@@ -1,36 +1,31 @@
 # All-in-One Rebuild
 
-Sauberer Neustart der All-in-One-App. Version **0.2.1.1** enthält bewusst nur das Dashboard-Fundament.
+Sauberer Neustart der All-in-One-App. Version **0.2.2** enthält das abgenommene Dashboard sowie das Kraftmodul bis einschließlich Plan- und Bibliothekseditor.
 
 ## Aktueller Umfang
 
-- kompaktes 2×2-Modulraster
-- konsistente SVG-Line-Icons statt Emojis
-- Status je Modul
-- Wochenübersicht mit Aktivitäten, aktiven Tagen und Modulwerten
-- Wochenkalender
-- Monatskalender
-- Tages-Sheet mit aufklappbaren Sessions
-- einfache Tagesplanung mit Umrisspunkten
-- Import alter Backups der ursprünglichen All-in-One-App
-- Export des neuen Zustands
-- Hash-Routing für Android-Zurück-Button und Reload
-- PWA-Grundlage ohne veralteten Service-Worker-Cache
-- mobile Höhenberechnung ohne künstliches Seiten-Padding
+- Dashboard mit Modulraster, Wochenübersicht, Kalender und Tagesdetails
+- Backup-Import und -Export
+- URL-Routing, Android-Zurück-Navigation und Pull-to-Reload
+- Kraft: Heute-Tab mit geplantem und freiem Training
+- Kraft: kompakte Kraft- und Cardioeingaben
+- Kraft: Zyklus- und Einheiteneditor
+- Kraft: Übungsbibliothek mit Archiv und Alternativen
+- Kraft: explizite Rest-Day-Kennzeichnung
+- Kraft: Heute korrigieren
+- lesbarer Kraftverlauf
 
 ## Bewusst noch nicht enthalten
 
-- Kraftmodul
-- Radmodul
-- Wandern-Modul
-- Challenge-Modul
-
-Die Modulkacheln öffnen nur eine neutrale Vorschauseite. Die Module werden erst nach der Dashboard-Abnahme einzeln portiert.
+- Kraft-Fortschrittscharts, PR-Anzeige und Teilen (`0.2.3`)
+- Radmodul (`0.3.x`)
+- Wandern-Modul (`0.4.x`)
+- Challenge-Modul (`0.5.x`)
 
 ## Projektstruktur
 
 ```text
-all-in-one-rebuild-0.1.0/
+all-in-one-rebuild-0.2.2/
 ├── index.html
 ├── manifest.webmanifest
 ├── sw.js
@@ -41,8 +36,19 @@ all-in-one-rebuild-0.1.0/
 │   ├── app.js
 │   ├── styles.css
 │   ├── core/
-│   ├── features/dashboard/
-│   ├── features/calendar/
+│   │   ├── date.js
+│   │   ├── model.js
+│   │   ├── router.js
+│   │   ├── storage.js
+│   │   └── viewport.js
+│   ├── features/
+│   │   ├── dashboard/
+│   │   ├── calendar/
+│   │   └── strength/
+│   │       ├── strength.js
+│   │       ├── strength-model.js
+│   │       ├── strength-session.js
+│   │       └── strength-plan.js
 │   └── ui/
 └── tests/
 ```
@@ -188,3 +194,40 @@ Planbearbeitung folgt in 0.2.2. Verlauf/Fortschritt und Teilen folgen in 0.2.3.
 - abgeschlossene Tages-Sessions zeigen statt des Dropdown-Pfeils ein Sperrsymbol
 - Eingabewerte können erst nach „Wieder öffnen“ erneut bearbeitet werden
 - beim Fokussieren eines Kraft- oder Cardiofeldes wird der komplette vorhandene Wert markiert
+
+
+## Plan und Bibliotheken 0.2.2
+
+### Plan und Zyklus
+
+- Zykluspositionen hoch- und runterschieben
+- einzelne Zykluspositionen entfernen
+- dieselbe Einheit beliebig oft in den Zyklus einfügen
+- heutige Position bleibt bei Umbauten konsistent
+- „Heute korrigieren“ verwirft ausschließlich heutige Kraftzustände und setzt einen neuen Anker
+- Einheiten anlegen, umbenennen und löschen
+- Einheiten explizit als Rest Day markieren oder wieder als normale Einheit kennzeichnen
+- Übungen einer Einheit hinzufügen, entfernen und sortieren
+
+### Übungsbibliothek
+
+- Kraft- und Cardioübungen anlegen und bearbeiten
+- Messwerte festlegen
+- Einarmig und Assistiert konfigurieren
+- Progression auf Aus, Double Progression, feste Wiederholungen oder Technik setzen
+- Gerätehinweise und Notizen speichern
+- Übungen archivieren und reaktivieren
+- archivierte Übungen verschwinden aus neuen Auswahlfenstern, bleiben aber in Einheiten und Verlauf lesbar
+- bestehende Bibliotheksübungen als einseitige Alternativen verknüpfen
+- verwendete Alternativen werden vor dem Trennen geschützt
+
+### Mobile Tastatur und Viewport
+
+- `interactive-widget=resizes-content` ergänzt
+- Layout- und Visual-Viewport werden getrennt behandelt
+- Synchronisierung bei Resize, Visual-Viewport-Scroll, App-Wechsel, Seitenwiederherstellung, Orientierung und Fokuswechsel
+- mehrstufige Neuberechnung während der Tastaturanimation
+- fokussierte Felder werden bei Bedarf in den sichtbaren Bereich gescrollt
+- die untere Kraftnavigation wird während geöffneter Tastatur ausgeblendet
+
+Fortschrittscharts, Verlauf/Fortschritt-Umschalter, PRs und Teilen folgen in `0.2.3`.
